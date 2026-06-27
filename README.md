@@ -8,8 +8,8 @@ y guardar el resultado en la misma carpeta del archivo original.
 
 La version 1.0 esta disponible en la pagina de releases:
 
-- `Achicar.PDF.x64.exe`: Windows x64.
-- `Achicar.PDF.arm.exe`: Windows ARM64.
+- [Achicar.PDF.x64.exe](https://github.com/franciscoxc/achicar-pdf/releases/download/v1.0/Achicar.PDF.x64.exe): Windows x64.
+- [Achicar.PDF.arm.exe](https://github.com/franciscoxc/achicar-pdf/releases/download/v1.0/Achicar.PDF.arm.exe): Windows ARM64.
 
 ## Como se usa
 
