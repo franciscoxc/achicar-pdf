@@ -4,6 +4,8 @@ Achicar PDF es una app simple para Windows que reduce PDFs escaneados usando
 Ghostscript. Esta pensada para tirar un PDF, elegir un tamano maximo o un PPI,
 y guardar el resultado en la misma carpeta del archivo original.
 
+<img src="assets/achicar-pdf-screenshot.png" alt="Captura de Achicar PDF" width="360">
+
 ## Descargar
 
 La version 1.1 esta disponible en la pagina de releases:
