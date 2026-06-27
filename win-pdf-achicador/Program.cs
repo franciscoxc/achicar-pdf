@@ -72,6 +72,31 @@ sealed class DropBox : Control
     }
 }
 
+sealed class ProgressStrip : Control
+{
+    int value;
+
+    public int Value
+    {
+        get => value;
+        set { this.value = Math.Clamp(value, 0, 100); Invalidate(); }
+    }
+
+    public ProgressStrip()
+    {
+        DoubleBuffered = true;
+        ResizeRedraw = true;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        e.Graphics.Clear(Color.FromArgb(215, 215, 215));
+        using var brush = new SolidBrush(Color.FromArgb(36, 107, 87));
+        e.Graphics.FillRectangle(brush, 0, 0, Width * Value / 100, Height);
+    }
+}
+
 sealed class MainForm : Form
 {
     const int TargetMinPpi = 50;
@@ -79,6 +104,7 @@ sealed class MainForm : Form
     const int TargetMaxAttempts = 7;
     const string GhostscriptApi = "https://api.github.com/repos/ArtifexSoftware/ghostpdl-downloads/releases/latest";
     const string GhostscriptPage = "https://ghostscript.com/releases/gsdnld.html";
+    const string DropHint = "tira tu pdf aqui\no haz clic para buscar";
 
     readonly int[] ppiValues = [75, 80, 90, 100, 150];
     readonly GroupBox smartBox = new() { Text = "modo inteligente", ForeColor = Color.Gray, Left = 16, Top = 12, Width = 294, Height = 76, Font = new Font(SystemFonts.DefaultFont.FontFamily, 7f) };
@@ -91,7 +117,7 @@ sealed class MainForm : Form
     readonly TrackBar ppi = new() { Left = 12, Top = 48, Width = 264, Minimum = 0, Maximum = 4, TickFrequency = 1, Value = 3, Font = SystemFonts.DefaultFont };
     readonly DropBox drop = new()
     {
-        Text = "tira tu pdf aqui",
+        Text = DropHint,
         Left = 24,
         Top = 198,
         Width = 278,
@@ -100,9 +126,10 @@ sealed class MainForm : Form
     };
     readonly Label result = new() { Left = 24, Top = 354, Width = 278, Height = 38, ForeColor = Color.Red };
     readonly Label outputName = new() { Left = 24, Top = 394, Width = 278, Height = 34, Visible = false, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleCenter };
-    readonly Label status = new() { Left = 24, Top = 436, Width = 170, Height = 28 };
+    readonly Label status = new() { Left = 24, Top = 432, Width = 170, Height = 32, Font = new Font(SystemFonts.DefaultFont.FontFamily, 10f, FontStyle.Bold), ForeColor = Color.FromArgb(36, 107, 87) };
     readonly Button cancel = new() { Text = "cancelar", Left = 204, Top = 432, Width = 98, Height = 28, Enabled = false, Visible = false };
     readonly Button showOutput = new() { Text = "mostrar mi PDF achicado", Left = 70, Top = 438, Width = 186, Height = 30, Enabled = false, Visible = false };
+    readonly ProgressStrip progress = new() { Left = 0, Top = 480, Width = 326, Height = 6, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom, Visible = false };
     string? gs;
     Process? current;
     bool working;
@@ -122,6 +149,7 @@ sealed class MainForm : Form
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon; } catch { }
         gs = FindGhostscript();
         clearTarget.FlatAppearance.BorderSize = 0;
+        drop.Cursor = Cursors.Hand;
 
         ppi.ValueChanged += (_, _) => ppiLabel.Text = $"PPI {ppiValues[ppi.Value]}";
         target.TextChanged += (_, _) => UpdateModeUi();
@@ -136,10 +164,12 @@ sealed class MainForm : Form
         drop.PdfImage = PdfIcon();
         smartBox.Controls.AddRange([targetLabel, target, clearTarget]);
         manualBox.Controls.AddRange([gray, ppiLabel, ppi]);
-        Controls.AddRange([smartBox, manualBox, drop, result, outputName, status, cancel, showOutput]);
+        Controls.AddRange([smartBox, manualBox, drop, result, outputName, status, cancel, showOutput, progress]);
+        progress.BringToFront();
         UpdateModeUi();
 
         Shown += async (_, _) => await EnsureGhostscript();
+        drop.Click += async (_, _) => await PickAndCompress();
 
         drop.DragEnter += (_, e) =>
         {
@@ -150,6 +180,19 @@ sealed class MainForm : Form
             var files = (string[]?)e.Data?.GetData(DataFormats.FileDrop);
             if (files?.Length > 0) _ = Compress(files[0]);
         };
+    }
+
+    async Task PickAndCompress()
+    {
+        if (working) return;
+        if (gs is null)
+        {
+            await EnsureGhostscript();
+            if (gs is null) return;
+        }
+
+        var path = PdfFileDialog.Show(Handle);
+        if (path is not null) await Compress(path);
     }
 
     async Task Compress(string input)
@@ -188,6 +231,8 @@ sealed class MainForm : Form
         result.Text = "";
         HideOutput();
         status.Text = "procesando 0%";
+        progress.Value = 0;
+        progress.Visible = true;
         cancel.Enabled = true;
         cancel.Visible = true;
 
@@ -210,6 +255,7 @@ sealed class MainForm : Form
             targetAttempt = 0;
             cancel.Enabled = false;
             cancel.Visible = false;
+            progress.Visible = false;
             cancelRequested = false;
         }
     }
@@ -333,9 +379,7 @@ sealed class MainForm : Form
                    "-dWriteXRefStm=true -dWriteObjStms=true " +
                    $"-dDownsampleColorImages=true -dColorImageResolution={res} " +
                    $"-dDownsampleGrayImages=true -dGrayImageResolution={res} " +
-                   $"-dDownsampleMonoImages=true -dMonoImageResolution=300 " +
-                   $"-dAutoFilterColorImages=false -dColorImageFilter=/DCTEncode " +
-                   $"-dAutoFilterGrayImages=false -dGrayImageFilter=/DCTEncode ";
+                   $"-dDownsampleMonoImages=true -dMonoImageResolution=300 ";
 
         if (activeGray) args += "-sColorConversionStrategy=Gray -sProcessColorModel=DeviceGray -dOverrideICC ";
         return args + $"-sOutputFile=\"{output}\" \"{input}\"";
@@ -359,6 +403,8 @@ sealed class MainForm : Form
         showOutput.Visible = true;
         showOutput.Enabled = true;
         status.Visible = false;
+        progress.Value = 100;
+        progress.Visible = false;
         outputName.BringToFront();
         showOutput.BringToFront();
         drop.DimIcon = true;
@@ -372,6 +418,8 @@ sealed class MainForm : Form
         showOutput.Visible = false;
         showOutput.Enabled = false;
         showOutput.Tag = null;
+        progress.Visible = false;
+        progress.Value = 0;
     }
 
     void OpenOutput()
@@ -422,7 +470,7 @@ sealed class MainForm : Form
             if (gs is not null)
             {
                 status.Text = "";
-                drop.Text = "tira tu pdf aqui";
+                drop.Text = DropHint;
                 return;
             }
 
@@ -542,7 +590,12 @@ sealed class MainForm : Form
         var text = findingTarget
             ? $"probando {activePpi} PPI {totalPercent}%"
             : $"procesando {percent}%";
-        BeginInvoke(new Action(() => status.Text = text));
+        var progressValue = findingTarget ? totalPercent : percent;
+        BeginInvoke(new Action(() =>
+        {
+            status.Text = text;
+            progress.Value = progressValue;
+        }));
     }
 
     bool TryGetTargetBytes(out long? bytes)
@@ -592,5 +645,144 @@ sealed class MainForm : Form
                         return exe;
 
         return null;
+    }
+}
+
+static class PdfFileDialog
+{
+    const int Cancelled = unchecked((int)0x800704C7);
+
+    public static string? Show(IntPtr owner)
+    {
+        if (OperatingSystem.IsWindowsVersionAtLeast(6))
+        {
+            try { return ShowNative(owner); }
+            catch { }
+        }
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Abrir y comprimir PDF",
+            Filter = "PDF (*.pdf)|*.pdf|Todos los archivos (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+        return dialog.ShowDialog() == DialogResult.OK ? dialog.FileName : null;
+    }
+
+    static string? ShowNative(IntPtr owner)
+    {
+        var dialog = (IFileOpenDialog)new FileOpenDialogCom();
+        try
+        {
+            var filters = new[]
+            {
+                new ComDlgFilterSpec("PDF (*.pdf)", "*.pdf"),
+                new ComDlgFilterSpec("Todos los archivos (*.*)", "*.*")
+            };
+            dialog.SetFileTypes((uint)filters.Length, filters);
+            dialog.SetFileTypeIndex(1);
+            dialog.SetTitle("Abrir y comprimir PDF");
+            dialog.SetOkButtonLabel("Abrir y comprimir");
+            dialog.SetOptions(FileOpenOptions.ForceFileSystem | FileOpenOptions.PathMustExist | FileOpenOptions.FileMustExist | FileOpenOptions.NoChangeDir);
+
+            var hr = dialog.Show(owner);
+            if (hr == Cancelled) return null;
+            Marshal.ThrowExceptionForHR(hr);
+
+            dialog.GetResult(out var item);
+            try
+            {
+                item.GetDisplayName(SigDn.FileSysPath, out var pathPtr);
+                try { return Marshal.PtrToStringUni(pathPtr); }
+                finally { Marshal.FreeCoTaskMem(pathPtr); }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(item);
+            }
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(dialog);
+        }
+    }
+
+    [ComImport]
+    [Guid("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7")]
+    class FileOpenDialogCom
+    {
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct ComDlgFilterSpec
+    {
+        [MarshalAs(UnmanagedType.LPWStr)] public string name;
+        [MarshalAs(UnmanagedType.LPWStr)] public string spec;
+
+        public ComDlgFilterSpec(string name, string spec)
+        {
+            this.name = name;
+            this.spec = spec;
+        }
+    }
+
+    [Flags]
+    enum FileOpenOptions : uint
+    {
+        NoChangeDir = 0x8,
+        ForceFileSystem = 0x40,
+        PathMustExist = 0x800,
+        FileMustExist = 0x1000
+    }
+
+    enum SigDn : uint
+    {
+        FileSysPath = 0x80058000
+    }
+
+    [ComImport]
+    [Guid("D57C7288-D4AD-4768-BE02-9D969532D960")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IFileOpenDialog
+    {
+        [PreserveSig] int Show(IntPtr parent);
+        void SetFileTypes(uint cFileTypes, [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 0)] ComDlgFilterSpec[] rgFilterSpec);
+        void SetFileTypeIndex(uint iFileType);
+        void GetFileTypeIndex(out uint piFileType);
+        void Advise(IntPtr pfde, out uint pdwCookie);
+        void Unadvise(uint dwCookie);
+        void SetOptions(FileOpenOptions fos);
+        void GetOptions(out FileOpenOptions pfos);
+        void SetDefaultFolder(IShellItem psi);
+        void SetFolder(IShellItem psi);
+        void GetFolder(out IShellItem ppsi);
+        void GetCurrentSelection(out IShellItem ppsi);
+        void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+        void GetFileName(out IntPtr pszName);
+        void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
+        void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
+        void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
+        void GetResult(out IShellItem ppsi);
+        void AddPlace(IShellItem psi, int fdap);
+        void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
+        void Close(int hr);
+        void SetClientGuid(ref Guid guid);
+        void ClearClientData();
+        void SetFilter(IntPtr pFilter);
+        void GetResults(out IntPtr ppenum);
+        void GetSelectedItems(out IntPtr ppsai);
+    }
+
+    [ComImport]
+    [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IShellItem
+    {
+        void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppv);
+        void GetParent(out IShellItem ppsi);
+        void GetDisplayName(SigDn sigdnName, out IntPtr ppszName);
+        void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+        void Compare(IShellItem psi, uint hint, out int piOrder);
     }
 }

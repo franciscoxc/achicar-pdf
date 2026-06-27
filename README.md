@@ -6,10 +6,10 @@ y guardar el resultado en la misma carpeta del archivo original.
 
 ## Descargar
 
-La version 1.0 esta disponible en la pagina de releases:
+La version 1.1 esta disponible en la pagina de releases:
 
-- [Achicar.PDF.x64.exe](https://github.com/franciscoxc/achicar-pdf/releases/download/v1.0/Achicar.PDF.x64.exe): Windows x64.
-- [Achicar.PDF.arm.exe](https://github.com/franciscoxc/achicar-pdf/releases/download/v1.0/Achicar.PDF.arm.exe): Windows ARM64.
+- [Achicar.PDF.x64.exe](https://github.com/franciscoxc/achicar-pdf/releases/download/v1.1/Achicar.PDF.x64.exe): Windows x64.
+- [Achicar.PDF.arm.exe](https://github.com/franciscoxc/achicar-pdf/releases/download/v1.1/Achicar.PDF.arm.exe): Windows ARM64.
 
 ## Como se usa
 
@@ -17,9 +17,10 @@ La version 1.0 esta disponible en la pagina de releases:
 2. Si Ghostscript no esta instalado, la app lo descarga desde el GitHub oficial
    de Artifex y abre el instalador.
 3. Arrastra un PDF al recuadro.
-4. Usa `Tamano maximo que necesitas` para que la app busque automaticamente el
+4. Tambien puedes hacer clic en el recuadro para buscar un PDF.
+5. Usa `Tamano maximo que necesitas` para que la app busque automaticamente el
    PPI mas alto que queda por debajo de ese limite.
-5. Si dejas el tamano vacio, usa el modo manual con el slider de PPI.
+6. Si dejas el tamano vacio, usa el modo manual con el slider de PPI.
 
 El archivo resultante se guarda en la misma carpeta del original. El nombre
 incluye el PPI usado y si fue Color o Gris.
@@ -44,11 +45,11 @@ licencia comercial. Mas informacion:
 
 https://ghostscript.com/releases/gsdnld.html
 
-## Checksums v1.0
+## Checksums v1.1
 
 ```text
-279767acb48e95ba463645da4bb7ca1bf9ce5d76d2eeb044c07be63ff6370b96  Achicar.PDF.arm.exe
-79ebe50c484c683da623ecc2562b003c0bf97a28aad1178780f13c550c45431e  Achicar.PDF.x64.exe
+d49bf608592f447197a78186230eb0901d294576ad2b80221304a6019064bd05  Achicar.PDF.arm.exe
+53caac3386da2a670951aaa9a2debe6221f0cdd4b814094b97759992fb91037d  Achicar.PDF.x64.exe
 ```
 
 ## Compilar

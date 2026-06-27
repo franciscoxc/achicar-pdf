@@ -1,4 +1,6 @@
 .DS_Store
+.wrangler/
+tmp/
 bin/
 obj/
 publish/
