@@ -8,8 +8,8 @@ y guardar el resultado en la misma carpeta del archivo original.
 
 La version 1.0 esta disponible en la pagina de releases:
 
-- `Achicar PDF x64.exe`: Windows x64.
-- `Achicar PDF arm.exe`: Windows ARM64.
+- `Achicar.PDF.x64.exe`: Windows x64.
+- `Achicar.PDF.arm.exe`: Windows ARM64.
 
 ## Como se usa
 
@@ -47,8 +47,8 @@ https://ghostscript.com/releases/gsdnld.html
 ## Checksums v1.0
 
 ```text
-279767acb48e95ba463645da4bb7ca1bf9ce5d76d2eeb044c07be63ff6370b96  Achicar PDF arm.exe
-79ebe50c484c683da623ecc2562b003c0bf97a28aad1178780f13c550c45431e  Achicar PDF x64.exe
+279767acb48e95ba463645da4bb7ca1bf9ce5d76d2eeb044c07be63ff6370b96  Achicar.PDF.arm.exe
+79ebe50c484c683da623ecc2562b003c0bf97a28aad1178780f13c550c45431e  Achicar.PDF.x64.exe
 ```
 
 ## Compilar

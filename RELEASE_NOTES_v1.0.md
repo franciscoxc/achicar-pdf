@@ -15,14 +15,14 @@ Primera version publica.
 
 ## Binarios
 
-- `Achicar PDF x64.exe`
-- `Achicar PDF arm.exe`
+- `Achicar.PDF.x64.exe`
+- `Achicar.PDF.arm.exe`
 
 ## SHA-256
 
 ```text
-279767acb48e95ba463645da4bb7ca1bf9ce5d76d2eeb044c07be63ff6370b96  Achicar PDF arm.exe
-79ebe50c484c683da623ecc2562b003c0bf97a28aad1178780f13c550c45431e  Achicar PDF x64.exe
+279767acb48e95ba463645da4bb7ca1bf9ce5d76d2eeb044c07be63ff6370b96  Achicar.PDF.arm.exe
+79ebe50c484c683da623ecc2562b003c0bf97a28aad1178780f13c550c45431e  Achicar.PDF.x64.exe
 ```
 
 ## Nota sobre Ghostscript
