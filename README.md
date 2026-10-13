@@ -1,39 +1,50 @@
 # Achicar PDF
 
 Achicar PDF es una app simple para Windows que reduce PDFs escaneados usando
-Ghostscript. Esta pensada para tirar un PDF, elegir un tamano maximo o un PPI,
-y guardar el resultado en la misma carpeta del archivo original.
+Ghostscript. Está pensada para tirar un PDF, decir cuánto puede pesar como
+máximo y guardar el resultado en la misma carpeta del original.
 
-<img src="assets/achicar-pdf-screenshot.png" alt="Captura de Achicar PDF" width="360">
+<img src="assets/achicar-pdf-screenshot.png" alt="Achicar PDF listo para recibir un PDF, con tamaño máximo de 2 MB" width="300">
+<img src="assets/achicar-pdf-resultado.png" alt="Achicar PDF después de achicar un escaneo de 3,7 MB a 962 KB" width="300">
 
 ## Descargar
 
-La version 1.1 esta disponible en la pagina de releases:
+La última versión está en la página de releases:
 
-- [Achicar.PDF.x64.exe](https://github.com/franciscoxc/achicar-pdf/releases/download/v1.1/Achicar.PDF.x64.exe): Windows x64.
-- [Achicar.PDF.arm.exe](https://github.com/franciscoxc/achicar-pdf/releases/download/v1.1/Achicar.PDF.arm.exe): Windows ARM64.
+- [Achicar.PDF.x64.exe](https://github.com/franciscoxc/achicar-pdf/releases/latest/download/Achicar.PDF.x64.exe): Windows x64.
+- [Achicar.PDF.arm.exe](https://github.com/franciscoxc/achicar-pdf/releases/latest/download/Achicar.PDF.arm.exe): Windows ARM64.
 
-## Como se usa
+Los SHA-256 de cada versión están en las notas de su release. Como el `.exe` no
+está firmado, Windows puede mostrar "Windows protegió tu PC": toca
+`Más información` y luego `Ejecutar de todas formas`.
 
-1. Abri `Achicar PDF`.
-2. Si Ghostscript no esta instalado, la app lo descarga desde el GitHub oficial
-   de Artifex y abre el instalador.
-3. Arrastra un PDF al recuadro.
-4. Tambien puedes hacer clic en el recuadro para buscar un PDF.
-5. Usa `Tamano maximo que necesitas` para que la app busque automaticamente el
-   PPI mas alto que queda por debajo de ese limite.
-6. Si dejas el tamano vacio, usa el modo manual con el slider de PPI.
+## Cómo se usa
 
-El archivo resultante se guarda en la misma carpeta del original. El nombre
-incluye el PPI usado y si fue Color o Gris.
+1. Abre `Achicar PDF`.
+2. Si Ghostscript no está instalado (o tienes una versión vieja con fallas de
+   seguridad), la app descarga el instalador oficial de Artifex, comprueba su
+   firma digital y lo instala. Windows pide permiso una sola vez.
+3. Escribe el tamaño máximo que necesitas en MB, o usa los atajos `email 10` y
+   `portal 2`. La app recuerda el último tamaño.
+4. Tira uno o varios PDF (o una carpeta) al recuadro, o haz clic para buscar uno.
 
-## Recomendaciones
+También puedes arrastrar PDFs sobre el ícono del `.exe` o usar
+`Enviar a → Achicar PDF` en el menú del botón derecho del Explorador: la app
+agrega ese atajo sola al abrirse.
 
-- Escaneos comunes: Color, 100 PPI.
-- Mejor calidad: Color, 150 PPI.
-- Menor peso: Color, 75-90 PPI.
-- Forzar gris solo conviene probarlo si un PDF concreto mejora.
-- El modo inteligente busca entre 50 y 150 PPI.
+El resultado se guarda junto al original (o en Documentos, si esa carpeta no
+deja escribir). El nombre indica el PPI usado y si quedó en Color o en Gris.
+
+## Modos
+
+- **Inteligente** (con tamaño máximo): primero prueba sin bajar la resolución; si
+  no entra, busca el PPI más alto que entra, entre 50 y 300. Si ni a 50 PPI en
+  color entra, prueba en gris.
+- **Manual** (sin tamaño máximo): `Liviano` (75 PPI), `Normal` (100 PPI) o
+  `Calidad` (150 PPI), con opción de forzar gris.
+
+Si el resultado pesa más que el original, no guarda nada. Si el PDF tiene firma
+digital, avisa antes, porque al achicarlo la firma deja de ser válida.
 
 ## Ghostscript
 
@@ -43,25 +54,24 @@ instalador oficial desde:
 https://github.com/ArtifexSoftware/ghostpdl-downloads/releases
 
 Ghostscript es un componente externo publicado por Artifex bajo licencia AGPL o
-licencia comercial. Mas informacion:
+licencia comercial. Más información:
 
 https://ghostscript.com/releases/gsdnld.html
 
-## Checksums v1.1
+## Detalles técnicos
 
-```text
-d49bf608592f447197a78186230eb0901d294576ad2b80221304a6019064bd05  Achicar.PDF.arm.exe
-53caac3386da2a670951aaa9a2debe6221f0cdd4b814094b97759992fb91037d  Achicar.PDF.x64.exe
-```
+- No usa `PDFSETTINGS=/ebook`; la compresión queda definida por parámetros explícitos.
+- Siempre usa deduplicación de imágenes, compresión/subset de fuentes y object streams PDF 1.5.
+- El umbral de reducción es 1.0: un escaneo de 200 PPI pedido a 150 queda en 150
+  (con el valor por defecto de Ghostscript, 1.5, quedaba intacto).
+- El modo inteligente corre la primera ronda en paralelo (sin reducir, 50 y 150 PPI)
+  y estima el resto con la curva tamaño/PPI: unas 3 rondas en vez de 7.
+- 1 MB = 1.000.000 bytes, el límite más estricto que usan los portales.
+- Los intentos van a una carpeta propia en `%TEMP%` que se borra al terminar.
 
 ## Compilar
 
-Requisitos:
-
-- Windows.
-- .NET 8 SDK.
-
-Desde `win-pdf-achicador`:
+Requisitos: .NET 10 SDK. Desde `win-pdf-achicador`, en Windows:
 
 ```bat
 build-windows.bat
@@ -73,14 +83,31 @@ O con PowerShell:
 .\build-windows.ps1
 ```
 
-Los ejecutables quedan en:
+Los ejecutables quedan en `publish\win-x64\Achicar PDF.exe` y
+`publish\win-arm64\Achicar PDF.exe`.
 
-```text
-publish\win-x64\Achicar PDF.exe
-publish\win-arm64\Achicar PDF.exe
+Desde macOS o Linux también compila (no se puede ejecutar ahí):
+
+```sh
+dotnet publish "win-pdf-achicador/Achicar PDF.csproj" -c Release -r win-x64 -p:EnableWindowsTargeting=true
 ```
+
+Las pruebas del motor corren en cualquier sistema con Ghostscript instalado:
+
+```sh
+dotnet test tests
+```
+
+## Publicar una versión
+
+GitHub Actions compila y prueba en Windows en cada push. Para publicar:
+
+1. Escribe `RELEASE_NOTES_v1.2.md` (sin checksums).
+2. `git tag v1.2 && git push origin v1.2`.
+
+El workflow crea el release con los dos `.exe` y agrega los SHA-256 a las notas.
 
 ## Licencia
 
-El codigo de Achicar PDF se publica bajo licencia MIT. Ghostscript es un
+El código de Achicar PDF se publica bajo licencia MIT. Ghostscript es un
 componente externo con su propia licencia.

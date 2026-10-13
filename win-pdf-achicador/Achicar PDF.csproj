@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- WFO1000 pide atributos para el diseñador de WinForms, que este proyecto no usa. -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
     <AssemblyName>Achicar PDF</AssemblyName>
     <Title>Achicar PDF</Title>
     <Product>Achicar PDF</Product>
