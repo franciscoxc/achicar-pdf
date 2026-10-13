@@ -1,19 +1,19 @@
 using System.Diagnostics;
 using System.Drawing;
-using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Windows.Forms;
 
 static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        Application.Run(new MainForm(args));
     }
 }
 
@@ -99,22 +99,22 @@ sealed class ProgressStrip : Control
 
 sealed class MainForm : Form
 {
-    const int TargetMinPpi = 50;
-    const int TargetMaxPpi = 150;
-    const int TargetMaxAttempts = 7;
     const string GhostscriptApi = "https://api.github.com/repos/ArtifexSoftware/ghostpdl-downloads/releases/latest";
     const string GhostscriptPage = "https://ghostscript.com/releases/gsdnld.html";
-    const string DropHint = "tira tu pdf aqui\no haz clic para buscar";
+    const string DropHint = "Tira tus PDF aquí\no haz clic para buscar";
+    static readonly string SettingsFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Achicar PDF", "tamano-maximo.txt");
 
-    readonly int[] ppiValues = [75, 80, 90, 100, 150];
     readonly GroupBox smartBox = new() { Text = "modo inteligente", ForeColor = Color.Gray, Left = 16, Top = 12, Width = 294, Height = 76, Font = new Font(SystemFonts.DefaultFont.FontFamily, 7f) };
-    readonly Label targetLabel = new() { Text = "Tamano maximo que necesitas (MB)", Left = 12, Top = 22, Width = 260, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    readonly Label targetLabel = new() { Text = "Tamaño máximo que necesitas (MB)", Left = 12, Top = 22, Width = 260, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
     readonly TextBox target = new() { Left = 12, Top = 44, Width = 80, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
     readonly Button clearTarget = new() { Text = "x", Left = 98, Top = 44, Width = 22, Height = 22, FlatStyle = FlatStyle.Flat, ForeColor = Color.Red, Font = SystemFonts.DefaultFont, Enabled = false };
+    readonly LinkLabel emailPreset = new() { Text = "email 10", Left = 136, Top = 47, AutoSize = true, Font = SystemFonts.DefaultFont };
+    readonly LinkLabel portalPreset = new() { Text = "portal 2", Left = 210, Top = 47, AutoSize = true, Font = SystemFonts.DefaultFont };
     readonly GroupBox manualBox = new() { Text = "modo manual", ForeColor = Color.Gray, Left = 16, Top = 96, Width = 294, Height = 92, Font = new Font(SystemFonts.DefaultFont.FontFamily, 7f) };
     readonly CheckBox gray = new() { Text = "Forzar gris", Left = 12, Top = 24, Width = 180, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
-    readonly Label ppiLabel = new() { Text = "PPI 100", Left = 216, Top = 24, Width = 60, TextAlign = ContentAlignment.MiddleRight, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
-    readonly TrackBar ppi = new() { Left = 12, Top = 48, Width = 264, Minimum = 0, Maximum = 4, TickFrequency = 1, Value = 3, Font = SystemFonts.DefaultFont };
+    readonly RadioButton light = new() { Text = "Liviano", Tag = 75, Left = 12, Top = 56, Width = 84, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    readonly RadioButton normal = new() { Text = "Normal", Tag = 100, Left = 100, Top = 56, Width = 84, Checked = true, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    readonly RadioButton quality = new() { Text = "Calidad", Tag = 150, Left = 188, Top = 56, Width = 84, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
     readonly DropBox drop = new()
     {
         Text = DropHint,
@@ -130,266 +130,197 @@ sealed class MainForm : Form
     readonly Button cancel = new() { Text = "cancelar", Left = 204, Top = 432, Width = 98, Height = 28, Enabled = false, Visible = false };
     readonly Button showOutput = new() { Text = "mostrar mi PDF achicado", Left = 70, Top = 438, Width = 186, Height = 30, Enabled = false, Visible = false };
     readonly ProgressStrip progress = new() { Left = 0, Top = 480, Width = 326, Height = 6, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom, Visible = false };
+    readonly string[] startupFiles;
     string? gs;
-    Process? current;
+    Compressor? active;
     bool working;
-    bool cancelRequested;
-    bool findingTarget;
-    bool activeGray;
-    int activePpi;
-    int targetAttempt;
-    int totalPages;
+    bool updateOffered;
 
-    public MainForm()
+    public MainForm(string[] files)
     {
+        startupFiles = files;
         Text = "Achicar PDF";
         ClientSize = new Size(326, 486);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon; } catch { }
-        gs = FindGhostscript();
+        try { target.Text = File.ReadAllText(SettingsFile).Trim(); } catch { } // la primera vez no hay tamaño guardado
         clearTarget.FlatAppearance.BorderSize = 0;
         drop.Cursor = Cursors.Hand;
 
-        ppi.ValueChanged += (_, _) => ppiLabel.Text = $"PPI {ppiValues[ppi.Value]}";
         target.TextChanged += (_, _) => UpdateModeUi();
         clearTarget.Click += (_, _) => target.Clear();
+        emailPreset.LinkClicked += (_, _) => target.Text = "10";
+        portalPreset.LinkClicked += (_, _) => target.Text = "2";
         showOutput.Click += (_, _) => OpenOutput();
-        cancel.Click += (_, _) =>
+        cancel.Click += (_, _) => active?.Cancel();
+        // Sin esto Ghostscript seguiría corriendo solo y dejaría sus temporales.
+        FormClosing += (_, _) =>
         {
-            cancelRequested = true;
-            current?.Kill(true);
+            active?.Cancel();
+            active?.Dispose();
         };
 
         drop.PdfImage = PdfIcon();
-        smartBox.Controls.AddRange([targetLabel, target, clearTarget]);
-        manualBox.Controls.AddRange([gray, ppiLabel, ppi]);
+        smartBox.Controls.AddRange([targetLabel, target, clearTarget, emailPreset, portalPreset]);
+        manualBox.Controls.AddRange([gray, light, normal, quality]);
         Controls.AddRange([smartBox, manualBox, drop, result, outputName, status, cancel, showOutput, progress]);
         progress.BringToFront();
         UpdateModeUi();
 
-        Shown += async (_, _) => await EnsureGhostscript();
+        Shown += async (_, _) =>
+        {
+            AddToSendTo();
+            if (await EnsureGhostscript() && startupFiles.Length > 0) await CompressAll(startupFiles);
+        };
         drop.Click += async (_, _) => await PickAndCompress();
 
         drop.DragEnter += (_, e) =>
         {
-            if (gs is not null && e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy;
+            if (gs is not null && !working && e.Data?.GetDataPresent(DataFormats.FileDrop) == true) e.Effect = DragDropEffects.Copy;
         };
         drop.DragDrop += (_, e) =>
         {
-            var files = (string[]?)e.Data?.GetData(DataFormats.FileDrop);
-            if (files?.Length > 0) _ = Compress(files[0]);
+            if (e.Data?.GetData(DataFormats.FileDrop) is string[] files) _ = CompressAll(files);
         };
     }
+
+    int ManualPpi => (int)new[] { light, normal, quality }.First(r => r.Checked).Tag!;
 
     async Task PickAndCompress()
     {
-        if (working) return;
-        if (gs is null)
-        {
-            await EnsureGhostscript();
-            if (gs is null) return;
-        }
-
-        var path = PdfFileDialog.Show(Handle);
-        if (path is not null) await Compress(path);
+        if (working || !await EnsureGhostscript()) return;
+        if (PdfFileDialog.Show(Handle) is string path) await CompressAll([path]);
     }
 
-    async Task Compress(string input)
+    async Task CompressAll(string[] paths)
     {
-        if (working || !input.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) return;
-        status.Visible = true;
-        if (!TryGetTargetBytes(out var targetBytes))
-        {
-            HideOutput();
-            status.Text = "tamano invalido";
-            return;
-        }
-
-        var dir = Path.GetDirectoryName(input)!;
-        var name = Path.GetFileNameWithoutExtension(input);
-        drop.DimIcon = false;
-        if (targetBytes is long targetSize && new FileInfo(input).Length <= targetSize)
-        {
-            drop.Text = $"{Path.GetFileName(input)}\noriginal: {FormatSize(new FileInfo(input).Length)}";
-            result.Text = "El archivo que tiraste YA ES mas chico que lo que necesitas";
-            status.Text = "";
-            HideOutput();
-            return;
-        }
-
-        activeGray = targetBytes is null && gray.Checked;
-        var mode = activeGray ? "Gris" : "Color";
-        working = true;
-        cancelRequested = false;
-        findingTarget = targetBytes is not null;
-        activePpi = 0;
-        targetAttempt = 0;
-        totalPages = 0;
-
-        drop.Text = $"{Path.GetFileName(input)}\noriginal: {FormatSize(new FileInfo(input).Length)}";
-        result.Text = "";
+        if (working || gs is null) return;
+        // Una carpeta cuenta como todos los PDF que tiene adentro.
+        var files = paths.SelectMany(p => Directory.Exists(p) ? Directory.GetFiles(p, "*.pdf") : [p])
+            .Where(p => p.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
         HideOutput();
-        status.Text = "procesando 0%";
-        progress.Value = 0;
-        progress.Visible = true;
-        cancel.Enabled = true;
-        cancel.Visible = true;
-
+        result.Text = "";
+        if (files.Length == 0)
+        {
+            status.Text = "eso no es un PDF";
+            return;
+        }
+        if (!Compressor.TryParseMegabytes(target.Text, out var maxBytes))
+        {
+            status.Text = "tamaño inválido";
+            return;
+        }
         try
         {
-            if (targetBytes is long maxBytes) await CompressToTarget(input, dir, name, mode, maxBytes);
-            else await CompressSingle(input, dir, name, mode);
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsFile)!);
+            File.WriteAllText(SettingsFile, target.Text.Trim());
         }
-        catch (Exception ex)
+        catch { } // recordar el tamaño es un extra
+
+        working = true;
+        cancel.Enabled = cancel.Visible = true;
+        progress.Value = 0;
+        progress.Visible = true;
+        var results = new List<(string file, string? output, string message)>();
+        try
         {
-            status.Text = ex.Message;
+            foreach (var file in files)
+            {
+                var (output, message, cancelled) = await CompressOne(file, maxBytes, files.Length > 1 ? $"{results.Count + 1} de {files.Length}: " : "");
+                results.Add((file, output, message));
+                if (cancelled) break;
+            }
         }
         finally
         {
-            current?.Dispose();
-            current = null;
             working = false;
-            findingTarget = false;
-            activePpi = 0;
-            targetAttempt = 0;
-            cancel.Enabled = false;
-            cancel.Visible = false;
+            cancel.Enabled = cancel.Visible = false;
             progress.Visible = false;
-            cancelRequested = false;
+            status.Text = "";
+        }
+
+        var done = results.Where(r => r.output is not null).ToList();
+        var problem = results.FirstOrDefault(r => r.output is null);
+        result.Text = files.Length == 1
+            ? results[0].message
+            : $"{done.Count} de {files.Length} achicados" + (problem.file is null ? "" : $"\n{Path.GetFileName(problem.file)}: {problem.message}");
+        if (done.Count > 0) ShowOutput(done[^1].output!);
+    }
+
+    async Task<(string? output, string message, bool cancelled)> CompressOne(string input, long? maxBytes, string label)
+    {
+        var finished = false; // los avisos de progreso llegan en diferido y no deben pisar el resultado
+        using var compressor = new Compressor(gs!, new Progress<(string Text, int Percent)>(p =>
+        {
+            if (finished) return;
+            status.Text = p.Text;
+            progress.Value = p.Percent;
+        }));
+        active = compressor;
+        try
+        {
+            var original = new FileInfo(input).Length;
+            drop.DimIcon = false;
+            drop.Text = $"{label}{Path.GetFileName(input)}\noriginal: {FormatSize(original)}";
+            if (original <= maxBytes) return (null, "Ya pesa menos de lo que necesitas", false);
+            if (Compressor.HasSignature(input) && MessageBox.Show(
+                    this,
+                    $"«{Path.GetFileName(input)}» tiene firma digital. Si lo achicas, la firma deja de ser válida.\n\n¿Achicarlo igual?",
+                    "PDF firmado",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning) != DialogResult.Yes)
+                return (null, "No lo toqué porque tiene firma digital", false);
+
+            var best = maxBytes is long max
+                ? await compressor.ToTarget(input, max)
+                : await compressor.Manual(input, ManualPpi, gray.Checked);
+            if (best is null) return (null, $"No entra ni a {Compressor.MinPpi} PPI en gris: sube el tamaño máximo", false);
+            if (best.Size >= original) return (null, "Ya estaba bien comprimido: no lo toqué", false);
+
+            var output = Save(best, input);
+            var note = (maxBytes is not null && best.Gray ? ", en gris" : "") +
+                       (best.Ppi < 75 ? "\ncalidad baja: si puedes, sube el tamaño" : "");
+            return (output, $"{FormatSize(original)} → {FormatSize(best.Size)} (-{100 - best.Size * 100 / original}%){note}", false);
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, "cancelado", true);
+        }
+        catch (Exception ex)
+        {
+            return (null, ex.Message, false);
+        }
+        finally
+        {
+            finished = true;
+            active = null;
         }
     }
 
-    async Task CompressSingle(string input, string dir, string name, string mode)
+    // Junto al original; si esa carpeta no deja escribir (adjuntos, red), en Documentos.
+    static string Save(Attempt best, string input)
     {
-        var res = ppiValues[ppi.Value];
-        var output = Path.Combine(dir, $"{name} ppi{res} {mode}.pdf");
-        var temp = TempOutput(dir, name, Guid.NewGuid().ToString("N"), res);
-
-        if (!await RunGhostscript(input, temp, res))
+        var name = $"{Path.GetFileNameWithoutExtension(input)} {(best.Ppi is int ppi ? $"ppi{ppi}" : "optimizado")} {(best.Gray ? "Gris" : "Color")}.pdf";
+        var output = Path.Combine(Path.GetDirectoryName(input)!, name);
+        try
         {
-            DeleteIfExists(temp);
-            status.Text = cancelRequested ? "cancelado" : "fallo";
-            return;
+            File.Move(best.Path, output, true);
         }
-
-        File.Move(temp, output, true);
-        status.Text = "";
-        result.Text = $"Resultado: {FormatSize(new FileInfo(output).Length)}";
-        ShowOutput(output);
-    }
-
-    async Task CompressToTarget(string input, string dir, string name, string mode, long maxBytes)
-    {
-        var runId = Guid.NewGuid().ToString("N");
-        string? bestPath = null;
-        var bestPpi = 0;
-        long bestSize = 0;
-        var low = TargetMinPpi;
-        var high = TargetMaxPpi;
-
-        while (low <= high && !cancelRequested)
+        catch (Exception e) when (e is UnauthorizedAccessException or IOException)
         {
-            var res = (low + high) / 2;
-            var temp = TempOutput(dir, name, runId, res);
-            targetAttempt++;
-            status.Text = $"probando {res} PPI";
-
-            if (!await RunGhostscript(input, temp, res))
-            {
-                DeleteIfExists(temp);
-                DeleteIfExists(bestPath);
-                status.Text = cancelRequested ? "cancelado" : "fallo";
-                return;
-            }
-
-            var size = new FileInfo(temp).Length;
-            if (size <= maxBytes)
-            {
-                DeleteIfExists(bestPath);
-                bestPath = temp;
-                bestPpi = res;
-                bestSize = size;
-                low = res + 1;
-            }
-            else
-            {
-                DeleteIfExists(temp);
-                high = res - 1;
-            }
+            output = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), name);
+            File.Move(best.Path, output, true);
         }
-
-        if (cancelRequested)
-        {
-            DeleteIfExists(bestPath);
-            status.Text = "cancelado";
-            return;
-        }
-
-        if (bestPath is null)
-        {
-            status.Text = "target demasiado bajo";
-            result.Text = $"subi el target; {TargetMinPpi} PPI supera {FormatSize(maxBytes)}";
-            return;
-        }
-
-        var output = Path.Combine(dir, $"{name} ppi{bestPpi} {mode}.pdf");
-        File.Move(bestPath, output, true);
-        status.Text = "";
-        result.Text = bestPpi < 75
-            ? $"Resultado: {FormatSize(bestSize)}; sugerido mas MB"
-            : $"Resultado: {FormatSize(bestSize)}";
-        ShowOutput(output);
-    }
-
-    async Task<bool> RunGhostscript(string input, string output, int res)
-    {
-        totalPages = 0;
-        activePpi = res;
-        var args = BuildArgs(input, output, res);
-        var process = new Process
-        {
-            StartInfo = new ProcessStartInfo(gs!, args)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            }
-        };
-
-        current = process;
-        process.OutputDataReceived += (_, e) => TrackProgress(e.Data);
-        process.ErrorDataReceived += (_, e) => TrackProgress(e.Data);
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        await process.WaitForExitAsync();
-        var ok = process.ExitCode == 0 && !cancelRequested;
-        current = null;
-        process.Dispose();
-        return ok;
-    }
-
-    string BuildArgs(string input, string output, int res)
-    {
-        var args = $"-sDEVICE=pdfwrite -dCompatibilityLevel=1.5 -dNOPAUSE -dBATCH -dSAFER " +
-                   "-dUseFastColor=false " +
-                   "-dDetectDuplicateImages=true -dCompressFonts=true -dSubsetFonts=true " +
-                   "-dWriteXRefStm=true -dWriteObjStms=true " +
-                   $"-dDownsampleColorImages=true -dColorImageResolution={res} " +
-                   $"-dDownsampleGrayImages=true -dGrayImageResolution={res} " +
-                   $"-dDownsampleMonoImages=true -dMonoImageResolution=300 ";
-
-        if (activeGray) args += "-sColorConversionStrategy=Gray -sProcessColorModel=DeviceGray -dOverrideICC ";
-        return args + $"-sOutputFile=\"{output}\" \"{input}\"";
+        return output;
     }
 
     void UpdateModeUi()
     {
         var smart = target.Text.Trim().Length > 0 && target.Text.Trim() != "0";
         clearTarget.Enabled = target.Text.Length > 0;
-        gray.Enabled = ppi.Enabled = ppiLabel.Enabled = !smart;
+        gray.Enabled = light.Enabled = normal.Enabled = quality.Enabled = !smart;
         manualBox.ForeColor = smart ? Color.Silver : Color.Gray;
         targetLabel.ForeColor = smart ? SystemColors.ControlText : Color.Gray;
     }
@@ -428,57 +359,66 @@ sealed class MainForm : Form
             Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
     }
 
-    async Task EnsureGhostscript()
+    // "Enviar a → Achicar PDF" en el menú del Explorador. Se rehace en cada inicio por si el .exe cambió de lugar.
+    static void AddToSendTo()
     {
-        gs = FindGhostscript();
-        if (gs is not null) return;
-
-        drop.Text = "Ghostscript no esta instalado";
-        var ok = MessageBox.Show(
-            this,
-            "Para usar Achicar PDF necesitamos descargar un componente llamado Ghostscript.\n\nDeberas esperar un poquito y luego apretar SI y SIGUIENTE unas cuantas veces hasta terminar.\n\nEsto se hace solo una vez.",
-            "Ghostscript necesario",
-            MessageBoxButtons.OKCancel,
-            MessageBoxIcon.Information);
-        if (ok != DialogResult.OK)
+        try
         {
-            status.Text = "Ghostscript no instalado";
-            return;
+            dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+            var link = shell.CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.SendTo), "Achicar PDF.lnk"));
+            link.TargetPath = Environment.ProcessPath;
+            link.Save();
+        }
+        catch { } // si una política bloquea WScript, solo falta el atajo
+    }
+
+    // true si hay un Ghostscript para usar. Si falta o es una versión vieja, ofrece instalar el oficial.
+    async Task<bool> EnsureGhostscript()
+    {
+        gs ??= Ghostscript.Find();
+        var version = gs is null ? null : Ghostscript.VersionOf(gs);
+        if (gs is not null && (updateOffered || version is null || version >= Ghostscript.MinSafe)) return true;
+
+        updateOffered = true;
+        if (gs is null) drop.Text = "Ghostscript no está instalado";
+        var question = gs is null
+            ? "Para usar Achicar PDF necesitamos descargar un componente llamado Ghostscript.\n\nWindows te pedirá permiso una vez: aprieta Sí y espera a que termine.\n\nEsto se hace solo una vez."
+            : $"Tu Ghostscript {version} es una versión vieja con fallas de seguridad conocidas.\n\n¿Instalamos la versión nueva? Windows te pedirá permiso una vez.";
+        if (MessageBox.Show(this, question, "Ghostscript", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK)
+        {
+            if (gs is null) status.Text = "Ghostscript no instalado";
+            return gs is not null;
         }
 
         status.Visible = true;
         status.Text = "buscando instalador...";
+        string? installer = null;
         try
         {
-            var installer = await GetGhostscriptInstaller();
-            if (installer is null)
-            {
-                InstallFailed("No encontre un instalador compatible.");
-                return;
-            }
+            var asset = await GetGhostscriptInstaller();
+            if (asset is null) return InstallFailed("No encontré un instalador compatible.");
 
-            status.Text = installer.Value.note;
-            var path = await DownloadFile(installer.Value.url, installer.Value.name);
+            status.Text = asset.Value.note;
+            installer = await DownloadFile(asset.Value.url, asset.Value.name);
+            if (!Authenticode.IsSignedBy(installer, "Artifex"))
+                return InstallFailed("El instalador descargado no tiene una firma digital válida de Artifex, así que no lo ejecuté.");
+
             status.Text = "instalando Ghostscript...";
-            if (!await RunInstaller(path))
-            {
-                InstallFailed("No se pudo ejecutar el instalador.");
-                return;
-            }
+            if (!await RunInstaller(installer)) return InstallFailed("No se pudo ejecutar el instalador.");
 
-            gs = FindGhostscript();
-            if (gs is not null)
-            {
-                status.Text = "";
-                drop.Text = DropHint;
-                return;
-            }
-
-            InstallFailed("La instalacion termino, pero no encontre Ghostscript.");
+            gs = Ghostscript.Find();
+            if (gs is null) return InstallFailed("La instalación terminó, pero no encontré Ghostscript.");
+            status.Text = "";
+            drop.Text = DropHint;
+            return true;
         }
         catch (Exception ex)
         {
-            InstallFailed(ex.Message);
+            return InstallFailed(ex.Message);
+        }
+        finally
+        {
+            try { if (installer is not null) File.Delete(installer); } catch { }
         }
     }
 
@@ -534,11 +474,12 @@ sealed class MainForm : Form
         return path;
     }
 
+    // /S: instalación silenciosa de NSIS, sin la serie de "Siguiente".
     static async Task<bool> RunInstaller(string path)
     {
         try
         {
-            var process = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, Verb = "runas" });
+            var process = Process.Start(new ProcessStartInfo(path, "/S") { UseShellExecute = true, Verb = "runas" });
             if (process is null) return false;
             await process.WaitForExitAsync();
             var ok = process.ExitCode == 0;
@@ -551,12 +492,14 @@ sealed class MainForm : Form
         }
     }
 
-    void InstallFailed(string message)
+    // Devuelve si igual queda un Ghostscript usable (el viejo, cuando falló una actualización).
+    bool InstallFailed(string message)
     {
-        status.Text = "instalacion incompleta";
-        drop.Text = "Ghostscript no esta instalado";
-        if (MessageBox.Show(this, $"{message}\n\nQuieres abrir la descarga oficial?", "Ghostscript", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+        status.Text = "instalación incompleta";
+        if (gs is null) drop.Text = "Ghostscript no está instalado";
+        if (MessageBox.Show(this, $"{message}\n\n¿Quieres abrir la descarga oficial?", "Ghostscript", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
             Process.Start(new ProcessStartInfo(GhostscriptPage) { UseShellExecute = true });
+        return gs is not null;
     }
 
     static Bitmap PdfIcon()
@@ -579,72 +522,68 @@ sealed class MainForm : Form
         return image;
     }
 
-    void TrackProgress(string? line)
-    {
-        if (line is null) return;
-        if (line.StartsWith("Processing pages") && int.TryParse(line.Split(' ').Last().Trim('.'), out var total)) totalPages = total;
-        if (!line.StartsWith("Page ") || totalPages == 0 || !int.TryParse(line[5..], out var page)) return;
-
-        var percent = Math.Min(100, Math.Max(1, page * 100 / totalPages));
-        var totalPercent = Math.Min(99, ((Math.Max(1, targetAttempt) - 1) * 100 + percent) / TargetMaxAttempts);
-        var text = findingTarget
-            ? $"probando {activePpi} PPI {totalPercent}%"
-            : $"procesando {percent}%";
-        var progressValue = findingTarget ? totalPercent : percent;
-        BeginInvoke(new Action(() =>
-        {
-            status.Text = text;
-            progress.Value = progressValue;
-        }));
-    }
-
-    bool TryGetTargetBytes(out long? bytes)
-    {
-        bytes = null;
-        var text = target.Text.Trim();
-        if (text.Length == 0) return true;
-
-        text = text.Replace(',', '.');
-        if (!double.TryParse(text, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var mb)) return false;
-        if (mb <= 0) return true;
-
-        bytes = Math.Max(1, (long)Math.Floor(mb * 1024 * 1024));
-        return true;
-    }
-
-    static string TempOutput(string dir, string name, string runId, int res) =>
-        Path.Combine(dir, $"{name}.probando-{runId}-ppi{res}.pdf");
-
-    static void DeleteIfExists(string? path)
-    {
-        if (path is not null && File.Exists(path)) File.Delete(path);
-    }
-
     static string FormatSize(long bytes) =>
         bytes >= 1024 * 1024
             ? $"{bytes / 1024d / 1024d:0.0} MB"
             : $"{Math.Max(1, bytes / 1024)} KB";
+}
 
-    static string? FindGhostscript()
+// Comprueba la firma digital (Authenticode) de un ejecutable antes de correrlo como administrador.
+static class Authenticode
+{
+    public static bool IsSignedBy(string path, string publisher)
     {
-        string[] names = ["gswin64c.exe", "gswin32c.exe", "gs.exe"];
-        var paths = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator);
-        foreach (var dir in paths)
-            foreach (var name in names)
-                if (File.Exists(Path.Combine(dir, name))) return Path.Combine(dir, name);
+        var pathPtr = Marshal.StringToHGlobalUni(path);
+        var fileInfo = Marshal.AllocHGlobal(Marshal.SizeOf<WinTrustFileInfo>());
+        try
+        {
+            Marshal.StructureToPtr(new WinTrustFileInfo { Size = (uint)Marshal.SizeOf<WinTrustFileInfo>(), FilePath = pathPtr }, fileInfo, false);
+            var data = new WinTrustData { Size = (uint)Marshal.SizeOf<WinTrustData>(), UIChoice = 2, UnionChoice = 1, FileInfo = fileInfo }; // sin UI, archivo
+            var action = new Guid("00AAC56B-CD44-11D0-8CC2-00C04FC295EE"); // WINTRUST_ACTION_GENERIC_VERIFY_V2
+#pragma warning disable SYSLIB0057 // X509CertificateLoader no lee el firmante de un .exe; esta es la vía que sigue funcionando
+            return WinVerifyTrust(new IntPtr(-1), ref action, ref data) == 0 &&
+                   X509Certificate.CreateFromSignedFile(path).Subject.Contains(publisher, StringComparison.OrdinalIgnoreCase);
+#pragma warning restore SYSLIB0057
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(fileInfo);
+            Marshal.FreeHGlobal(pathPtr);
+        }
+    }
 
-        string[] common =
-        [
-            @"C:\Program Files\gs",
-            @"C:\Program Files (x86)\gs"
-        ];
-        foreach (var root in common)
-            if (Directory.Exists(root))
-                foreach (var name in names)
-                    foreach (var exe in Directory.GetFiles(root, name, SearchOption.AllDirectories))
-                        return exe;
+    [DllImport("wintrust.dll")]
+    static extern int WinVerifyTrust(IntPtr hwnd, ref Guid action, ref WinTrustData data);
 
-        return null;
+    [StructLayout(LayoutKind.Sequential)]
+    struct WinTrustFileInfo
+    {
+        public uint Size;
+        public IntPtr FilePath;
+        public IntPtr FileHandle;
+        public IntPtr KnownSubject;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct WinTrustData
+    {
+        public uint Size;
+        public IntPtr PolicyCallbackData;
+        public IntPtr SipClientData;
+        public uint UIChoice;
+        public uint RevocationChecks;
+        public uint UnionChoice;
+        public IntPtr FileInfo;
+        public uint StateAction;
+        public IntPtr StateData;
+        public IntPtr UrlReference;
+        public uint ProvFlags;
+        public uint UIContext;
+        public IntPtr SignatureSettings;
     }
 }
 
