@@ -1,0 +1,56 @@
+# Temporal: abre la app en Windows y devuelve capturas como artifact. Se borra antes de mergear.
+name: capturas
+on: push
+jobs:
+  capturas:
+    if: github.ref != 'refs/heads/main'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+      - run: choco install ghostscript --no-progress -y
+      - name: PDF de muestra
+        run: |
+          git fetch --depth 1 origin ffd8c8fa6a958b2876ebdb4678dbbc88468febec
+          git show "FETCH_HEAD:capturas/Contrato escaneado.pdf" > "$env:TEMP\Contrato escaneado.pdf"
+      - name: Compilar
+        working-directory: win-pdf-achicador
+        run: dotnet publish "Achicar PDF.csproj" -c Release -r win-x64 -o publish
+      - name: Capturas
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          Add-Type @"
+          using System; using System.Runtime.InteropServices;
+          public static class W {
+            public struct R { public int L, T, Ri, B; }
+            [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+            [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out R r, int s);
+          }
+          "@
+          $exe = (Resolve-Path "win-pdf-achicador/publish/Achicar PDF.exe").Path
+          $cfg = "$env:APPDATA\Achicar PDF"
+          New-Item -ItemType Directory -Force $cfg | Out-Null
+          New-Item -ItemType Directory -Force capturas | Out-Null
+          function Shot([string]$size, [string]$out, [string]$pdf, [int]$wait) {
+            Set-Content "$cfg\tamano-maximo.txt" $size
+            $p = if ($pdf) { Start-Process $exe -ArgumentList ('"' + $pdf + '"') -PassThru } else { Start-Process $exe -PassThru }
+            Start-Sleep $wait
+            $p.Refresh()
+            [W]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+            Start-Sleep 1
+            $r = New-Object W+R
+            [W]::DwmGetWindowAttribute($p.MainWindowHandle, 9, [ref]$r, 16) | Out-Null
+            $bmp = New-Object System.Drawing.Bitmap ($r.Ri - $r.L), ($r.B - $r.T)
+            [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen($r.L, $r.T, 0, 0, $bmp.Size)
+            $bmp.Save((Join-Path $PWD "capturas\$out"))
+            Stop-Process $p -Force
+          }
+          Shot "10" "inteligente.png" "" 8
+          Shot "" "manual.png" "" 8
+          Shot "2" "resultado.png" "$env:TEMP\Contrato escaneado.pdf" 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capturas
+          path: capturas/*.png

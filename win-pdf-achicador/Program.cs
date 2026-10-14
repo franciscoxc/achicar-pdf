@@ -21,6 +21,7 @@ sealed class DropBox : Control
 {
     Bitmap? pdfImage;
     bool dimIcon;
+    string result = "";
 
     public DropBox()
     {
@@ -40,6 +41,13 @@ sealed class DropBox : Control
         set { dimIcon = value; Invalidate(); }
     }
 
+    // En rojo, debajo del nombre: el ahorro conseguido o por qué no se pudo.
+    public string Result
+    {
+        get => result;
+        set { result = value; Invalidate(); }
+    }
+
     protected override void OnTextChanged(EventArgs e)
     {
         base.OnTextChanged(e);
@@ -53,11 +61,14 @@ sealed class DropBox : Control
         ControlPaint.DrawBorder(g, ClientRectangle, Color.FromArgb(100, 100, 100), ButtonBorderStyle.Solid);
 
         var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl | TextFormatFlags.NoPadding;
+        // Un hijo visible (el botón "mostrar ahora") ocupa el pie del recuadro.
+        var bottom = Controls.Cast<Control>().Where(c => c.Visible).Select(c => c.Top - 4).DefaultIfEmpty(Height).Min();
         var textSize = TextRenderer.MeasureText(g, Text, Font, new Size(Width - 24, Height), flags);
+        var resultSize = result.Length == 0 ? Size.Empty : TextRenderer.MeasureText(g, result, Font, new Size(Width - 24, Height), flags);
         var iconSize = PdfImage?.Size ?? Size.Empty;
-        var gap = PdfImage is null || Text.Length == 0 ? 0 : 10;
-        var blockHeight = iconSize.Height + gap + textSize.Height;
-        var y = Math.Max(8, (Height - blockHeight) / 2);
+        var gap = PdfImage is null || Text.Length + result.Length == 0 ? 0 : 10;
+        var blockHeight = iconSize.Height + gap + textSize.Height + resultSize.Height;
+        var y = Math.Max(8, (bottom - blockHeight) / 2);
 
         if (PdfImage is not null)
         {
@@ -67,8 +78,10 @@ sealed class DropBox : Control
             y += iconSize.Height + gap;
         }
 
-        var textRect = new Rectangle(12, y, Width - 24, Height - y - 8);
+        var textRect = new Rectangle(12, y, Width - 24, textSize.Height);
         TextRenderer.DrawText(g, Text, Font, textRect, ForeColor, flags | TextFormatFlags.Top);
+        if (result.Length > 0)
+            TextRenderer.DrawText(g, result, Font, new Rectangle(12, y + textSize.Height, Width - 24, Math.Max(0, bottom - y - textSize.Height)), Color.Red, flags | TextFormatFlags.Top);
     }
 }
 
@@ -105,31 +118,31 @@ sealed class MainForm : Form
     static readonly string SettingsFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Achicar PDF", "tamano-maximo.txt");
 
     readonly GroupBox smartBox = new() { Text = "modo inteligente", ForeColor = Color.Gray, Left = 16, Top = 12, Width = 294, Height = 76, Font = new Font(SystemFonts.DefaultFont.FontFamily, 7f) };
-    readonly Label targetLabel = new() { Text = "Tamaño máximo que necesitas (MB)", Left = 12, Top = 22, Width = 260, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
-    readonly TextBox target = new() { Left = 12, Top = 44, Width = 80, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
-    readonly Button clearTarget = new() { Text = "x", Left = 98, Top = 44, Width = 22, Height = 22, FlatStyle = FlatStyle.Flat, ForeColor = Color.Red, Font = SystemFonts.DefaultFont, Enabled = false };
+    readonly Label targetLabel = new() { Text = "Tamaño máximo que necesitas", Left = 12, Top = 22, Width = 260, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    readonly TextBox target = new() { Left = 12, Top = 44, Width = 64, MaxLength = 3, TextAlign = HorizontalAlignment.Right, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    // Va adentro del TextBox; ClearButtonSpace reserva ese lugar para que el número no quede debajo.
+    readonly Label clearTarget = new() { Width = 16, Height = 16, Cursor = Cursors.Hand, Visible = false };
+    readonly Label megabytes = new() { Text = "MB", Left = 80, Top = 47, AutoSize = true, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
     readonly LinkLabel emailPreset = new() { Text = "email 10", Left = 136, Top = 47, AutoSize = true, Font = SystemFonts.DefaultFont };
     readonly LinkLabel portalPreset = new() { Text = "portal 2", Left = 210, Top = 47, AutoSize = true, Font = SystemFonts.DefaultFont };
     readonly GroupBox manualBox = new() { Text = "modo manual", ForeColor = Color.Gray, Left = 16, Top = 96, Width = 294, Height = 92, Font = new Font(SystemFonts.DefaultFont.FontFamily, 7f) };
-    readonly CheckBox gray = new() { Text = "Forzar gris", Left = 12, Top = 24, Width = 180, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
-    readonly RadioButton light = new() { Text = "Liviano", Tag = 75, Left = 12, Top = 56, Width = 84, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
-    readonly RadioButton normal = new() { Text = "Normal", Tag = 100, Left = 100, Top = 56, Width = 84, Checked = true, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
-    readonly RadioButton quality = new() { Text = "Calidad", Tag = 150, Left = 188, Top = 56, Width = 84, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    readonly CheckBox gray = new() { Text = "Quitar color", Left = 12, Top = 24, Width = 180, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    readonly RadioButton light = new() { Text = "Pequeño", Tag = 75, Left = 12, Top = 56, Width = 84, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    readonly RadioButton normal = new() { Text = "Normal", Tag = 100, Left = 96, Top = 56, Width = 80, Checked = true, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
+    readonly RadioButton quality = new() { Text = "Más calidad", Tag = 150, Left = 178, Top = 56, Width = 104, ForeColor = SystemColors.ControlText, Font = SystemFonts.DefaultFont };
     readonly DropBox drop = new()
     {
         Text = DropHint,
         Left = 24,
         Top = 198,
         Width = 278,
-        Height = 146,
+        Height = 168,
         AllowDrop = true
     };
-    readonly Label result = new() { Left = 24, Top = 354, Width = 278, Height = 38, ForeColor = Color.Red };
-    readonly Label outputName = new() { Left = 24, Top = 394, Width = 278, Height = 34, Visible = false, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleCenter };
-    readonly Label status = new() { Left = 24, Top = 432, Width = 170, Height = 32, Font = new Font(SystemFonts.DefaultFont.FontFamily, 10f, FontStyle.Bold), ForeColor = Color.FromArgb(36, 107, 87) };
-    readonly Button cancel = new() { Text = "cancelar", Left = 204, Top = 432, Width = 98, Height = 28, Enabled = false, Visible = false };
-    readonly Button showOutput = new() { Text = "mostrar mi PDF achicado", Left = 70, Top = 438, Width = 186, Height = 30, Enabled = false, Visible = false };
-    readonly ProgressStrip progress = new() { Left = 0, Top = 480, Width = 326, Height = 6, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom, Visible = false };
+    readonly Label status = new() { Left = 24, Top = 374, Width = 170, Height = 32, Font = new Font(SystemFonts.DefaultFont.FontFamily, 10f, FontStyle.Bold), ForeColor = Color.FromArgb(36, 107, 87) };
+    readonly Button cancel = new() { Text = "cancelar", Left = 204, Top = 374, Width = 98, Height = 28, Enabled = false, Visible = false };
+    readonly Button showOutput = new() { Text = "mostrar ahora", Left = 84, Top = 132, Width = 110, Height = 28, Enabled = false, Visible = false };
+    readonly ProgressStrip progress = new() { Left = 0, Top = 412, Width = 326, Height = 6, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom, Visible = false };
     readonly string[] startupFiles;
     string? gs;
     Compressor? active;
@@ -140,15 +153,27 @@ sealed class MainForm : Form
     {
         startupFiles = files;
         Text = "Achicar PDF";
-        ClientSize = new Size(326, 486);
+        ClientSize = new Size(326, 418);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? Icon; } catch { }
         try { target.Text = File.ReadAllText(SettingsFile).Trim(); } catch { } // la primera vez no hay tamaño guardado
-        clearTarget.FlatAppearance.BorderSize = 0;
+        clearTarget.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            e.Graphics.FillEllipse(Brushes.Red, 1, 1, 13, 13);
+            using var pen = new Pen(Color.White, 1.6f);
+            e.Graphics.DrawLine(pen, 4.5f, 4.5f, 10.5f, 10.5f);
+            e.Graphics.DrawLine(pen, 10.5f, 4.5f, 4.5f, 10.5f);
+        };
+        target.Controls.Add(clearTarget);
+        target.HandleCreated += (_, _) => ClearButtonSpace();
+        target.Resize += (_, _) => ClearButtonSpace();
         drop.Cursor = Cursors.Hand;
 
         target.TextChanged += (_, _) => UpdateModeUi();
+        // Solo megas enteros: nadie necesita 2,5 MB, y así el recuadro chico alcanza.
+        target.KeyPress += (_, e) => e.Handled = !char.IsDigit(e.KeyChar) && !char.IsControl(e.KeyChar);
         clearTarget.Click += (_, _) => target.Clear();
         emailPreset.LinkClicked += (_, _) => target.Text = "10";
         portalPreset.LinkClicked += (_, _) => target.Text = "2";
@@ -162,9 +187,10 @@ sealed class MainForm : Form
         };
 
         drop.PdfImage = PdfIcon();
-        smartBox.Controls.AddRange([targetLabel, target, clearTarget, emailPreset, portalPreset]);
+        smartBox.Controls.AddRange([targetLabel, target, megabytes, emailPreset, portalPreset]);
         manualBox.Controls.AddRange([gray, light, normal, quality]);
-        Controls.AddRange([smartBox, manualBox, drop, result, outputName, status, cancel, showOutput, progress]);
+        drop.Controls.Add(showOutput);
+        Controls.AddRange([smartBox, manualBox, drop, status, cancel, progress]);
         progress.BringToFront();
         UpdateModeUi();
 
@@ -201,7 +227,7 @@ sealed class MainForm : Form
             .Where(p => p.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
             .ToArray();
         HideOutput();
-        result.Text = "";
+        drop.Result = "";
         if (files.Length == 0)
         {
             status.Text = "eso no es un PDF";
@@ -243,7 +269,9 @@ sealed class MainForm : Form
 
         var done = results.Where(r => r.output is not null).ToList();
         var problem = results.FirstOrDefault(r => r.output is null);
-        result.Text = files.Length == 1
+        // El resultado reemplaza la línea "original: ..." del recuadro.
+        drop.Text = files.Length == 1 ? Path.GetFileName(files[0]) : "";
+        drop.Result = files.Length == 1
             ? results[0].message
             : $"{done.Count} de {files.Length} achicados" + (problem.file is null ? "" : $"\n{Path.GetFileName(problem.file)}: {problem.message}");
         if (done.Count > 0) ShowOutput(done[^1].output!);
@@ -319,33 +347,36 @@ sealed class MainForm : Form
     void UpdateModeUi()
     {
         var smart = target.Text.Trim().Length > 0 && target.Text.Trim() != "0";
-        clearTarget.Enabled = target.Text.Length > 0;
+        clearTarget.Visible = target.Text.Length > 0;
         gray.Enabled = light.Enabled = normal.Enabled = quality.Enabled = !smart;
         manualBox.ForeColor = smart ? Color.Silver : Color.Gray;
-        targetLabel.ForeColor = smart ? SystemColors.ControlText : Color.Gray;
+        targetLabel.ForeColor = megabytes.ForeColor = smart ? SystemColors.ControlText : Color.Gray;
     }
+
+    // EM_SETMARGINS con EC_RIGHTMARGIN: el texto termina antes del botón redondo.
+    void ClearButtonSpace()
+    {
+        clearTarget.Location = new Point(target.ClientSize.Width - clearTarget.Width - 2, (target.ClientSize.Height - clearTarget.Height) / 2);
+        SendMessage(target.Handle, 0xD3, 2, (clearTarget.Width + 4) << 16);
+    }
+
+    [DllImport("user32.dll")]
+    static extern IntPtr SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
 
     void ShowOutput(string path)
     {
-        outputName.Text = Path.GetFileName(path);
-        outputName.Tag = path;
-        outputName.Visible = true;
         showOutput.Tag = path;
         showOutput.Visible = true;
         showOutput.Enabled = true;
         status.Visible = false;
         progress.Value = 100;
         progress.Visible = false;
-        outputName.BringToFront();
-        showOutput.BringToFront();
         drop.DimIcon = true;
     }
 
     void HideOutput()
     {
         status.Visible = true;
-        outputName.Visible = false;
-        outputName.Tag = null;
         showOutput.Visible = false;
         showOutput.Enabled = false;
         showOutput.Tag = null;
