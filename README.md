@@ -4,8 +4,8 @@ Achicar PDF es una app simple para Windows que reduce PDFs escaneados usando
 Ghostscript. Está pensada para tirar un PDF, decir cuánto puede pesar como
 máximo y guardar el resultado en la misma carpeta del original.
 
-<img src="assets/achicar-pdf-screenshot.png" alt="Achicar PDF listo para recibir un PDF, con tamaño máximo de 2 MB" width="300">
-<img src="assets/achicar-pdf-resultado.png" alt="Achicar PDF después de achicar un escaneo de 3,7 MB a 962 KB" width="300">
+<img src="assets/achicar-pdf-screenshot.png" alt="Achicar PDF listo para recibir un PDF, con tamaño máximo de 10 MB" width="300">
+<img src="assets/achicar-pdf-resultado.png" alt="Achicar PDF después de achicar un escaneo de 3,7 MB a 1,8 MB, con el botón mostrar ahora" width="300">
 
 ## Descargar
 
@@ -23,10 +23,13 @@ está firmado, Windows puede mostrar "Windows protegió tu PC": toca
 1. Abre `Achicar PDF`.
 2. Si Ghostscript no está instalado (o tienes una versión vieja con fallas de
    seguridad), la app descarga el instalador oficial de Artifex, comprueba su
-   firma digital y lo instala. Windows pide permiso una sola vez.
-3. Escribe el tamaño máximo que necesitas en MB, o usa los atajos `email 10` y
-   `portal 2`. La app recuerda el último tamaño.
+   firma digital y lo abre: Windows pide permiso y después se avanza con
+   `Siguiente` hasta el final. Artifex no permite instalarlo en silencio.
+3. Escribe el tamaño máximo que necesitas, en MB enteros, o usa los atajos
+   `email 10` y `portal 2`. La app recuerda el último tamaño.
 4. Tira uno o varios PDF (o una carpeta) al recuadro, o haz clic para buscar uno.
+5. El recuadro muestra en rojo cuánto se ahorró, y `mostrar ahora` abre la
+   carpeta con el PDF achicado seleccionado.
 
 También puedes arrastrar PDFs sobre el ícono del `.exe` o usar
 `Enviar a → Achicar PDF` en el menú del botón derecho del Explorador: la app
@@ -40,8 +43,8 @@ deja escribir). El nombre indica el PPI usado y si quedó en Color o en Gris.
 - **Inteligente** (con tamaño máximo): primero prueba sin bajar la resolución; si
   no entra, busca el PPI más alto que entra, entre 50 y 300. Si ni a 50 PPI en
   color entra, prueba en gris.
-- **Manual** (sin tamaño máximo): `Liviano` (75 PPI), `Normal` (100 PPI) o
-  `Calidad` (150 PPI), con opción de forzar gris.
+- **Manual** (sin tamaño máximo): `Pequeño` (75 PPI), `Normal` (100 PPI) o
+  `Más calidad` (150 PPI), con la opción `Quitar color`.
 
 Si el resultado pesa más que el original, no guarda nada. Si el PDF tiene firma
 digital, avisa antes, porque al achicarlo la firma deja de ser válida.
