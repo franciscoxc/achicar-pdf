@@ -12,7 +12,7 @@ Más rápido, más simple y sin sorpresas.
 - Atajos `email 10` y `portal 2`, y la app recuerda el último tamaño máximo.
 - El modo manual pasa a tres opciones: Liviano, Normal y Calidad.
 - Muestra cuánto se ahorró: `14,2 MB → 1,9 MB (-87%)`.
-- Instalación de Ghostscript en silencio (un solo permiso de Windows), con verificación de la firma digital del instalador.
+- Descarga el instalador oficial de Ghostscript y verifica su firma digital antes de abrirlo. La instalación sigue con el asistente de Ghostscript, porque Artifex no permite instalarlo en silencio.
 - Avisa si Ghostscript es una versión vieja con fallas de seguridad y ofrece actualizarlo.
 
 ## Arreglos

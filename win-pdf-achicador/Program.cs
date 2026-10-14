@@ -382,8 +382,8 @@ sealed class MainForm : Form
         updateOffered = true;
         if (gs is null) drop.Text = "Ghostscript no está instalado";
         var question = gs is null
-            ? "Para usar Achicar PDF necesitamos descargar un componente llamado Ghostscript.\n\nWindows te pedirá permiso una vez: aprieta Sí y espera a que termine.\n\nEsto se hace solo una vez."
-            : $"Tu Ghostscript {version} es una versión vieja con fallas de seguridad conocidas.\n\n¿Instalamos la versión nueva? Windows te pedirá permiso una vez.";
+            ? "Para usar Achicar PDF necesitamos descargar un componente llamado Ghostscript.\n\nWindows te pedirá permiso: aprieta Sí. Después se abre el instalador de Ghostscript: avanza con Siguiente hasta el final.\n\nEsto se hace solo una vez."
+            : $"Tu Ghostscript {version} es una versión vieja con fallas de seguridad conocidas.\n\n¿Instalamos la versión nueva? Windows te pedirá permiso y se abrirá el instalador de Ghostscript: avanza con Siguiente hasta el final.";
         if (MessageBox.Show(this, question, "Ghostscript", MessageBoxButtons.OKCancel, MessageBoxIcon.Information) != DialogResult.OK)
         {
             if (gs is null) status.Text = "Ghostscript no instalado";
@@ -474,12 +474,13 @@ sealed class MainForm : Form
         return path;
     }
 
-    // /S: instalación silenciosa de NSIS, sin la serie de "Siguiente".
     static async Task<bool> RunInstaller(string path)
     {
         try
         {
-            var process = Process.Start(new ProcessStartInfo(path, "/S") { UseShellExecute = true, Verb = "runas" });
+            // ponytail-keep: sin /S. Artifex lo desactivó a propósito desde Ghostscript 10.01.0: con /S el asistente
+            // se abre igual (probado con 10.08 en Windows 11 ARM), así que el aviso previo dice que hay que darle Siguiente.
+            var process = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true, Verb = "runas" });
             if (process is null) return false;
             await process.WaitForExitAsync();
             var ok = process.ExitCode == 0;
