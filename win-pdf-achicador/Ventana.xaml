@@ -47,7 +47,10 @@
                 <!-- Arriba a la derecha: la flecha circular busca una versión nueva; cuando la descargó, el mismo
                      botón se estira hasta decir «Reiniciar para actualizar». -->
                 <Button x:Name="actualizar" Style="{StaticResource Llano}" HorizontalAlignment="Right" Margin="0,0,0,6"
-                        AutomationProperties.Name="Buscar actualización">
+                        AutomationProperties.Name="Buscar actualización" RenderTransformOrigin="1,0.5">
+                    <Button.RenderTransform>
+                        <ScaleTransform x:Name="actualizarEscala"/>
+                    </Button.RenderTransform>
                     <Grid x:Name="actualizarCaja" Width="32" Height="32">
                         <Border CornerRadius="16" Background="{DynamicResource SubtleFillColorSecondaryBrush}"/>
                         <Border x:Name="actualizarAcento" CornerRadius="16" Opacity="0"
@@ -134,8 +137,16 @@
                         <TranslateTransform x:Name="tarjetaCorrida"/>
                     </TransformGroup>
                 </Button.RenderTransform>
-                <Grid MinHeight="262" ClipToBounds="True">
-                    <Border CornerRadius="12" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+                <!-- MinHeight con lugar para un resultado de dos renglones: así la ventana no pega un salto. -->
+                <Grid MinHeight="282">
+                    <!-- La sombra va en el fondo y no en la tarjeta: en la tarjeta la proyectarían también los textos.
+                         Crece cuando la tarjeta se levanta. -->
+                    <Border x:Name="fondo" CornerRadius="12" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+                        <Border.Effect>
+                            <DropShadowEffect x:Name="sombra" BlurRadius="4" ShadowDepth="1" Opacity="0.06" Direction="270"/>
+                        </Border.Effect>
+                    </Border>
+                    <Grid ClipToBounds="True">
                     <!-- Un resplandor del amarillo del ícono detrás de la prensa: le da calor en los dos modos. -->
                     <Ellipse Width="260" Height="170" VerticalAlignment="Top" Margin="0,2,0,0" IsHitTestVisible="False">
                         <Ellipse.Fill>
@@ -181,15 +192,19 @@
                                 </Grid>
                                 <ProgressBar x:Name="progreso" Margin="0,12,0,0" Maximum="100"/>
                             </StackPanel>
-                            <Button x:Name="mostrar" Content="mostrar ahora" Visibility="Collapsed" Padding="16,5"
+                            <Button x:Name="mostrar" Content="mostrar ahora" Visibility="Collapsed" Padding="16,5" RenderTransformOrigin="0.5,0.5"
                                     HorizontalAlignment="Center" VerticalAlignment="Center"
                                     AutomationProperties.Name="Mostrar el PDF achicado en su carpeta">
                                 <Button.RenderTransform>
-                                    <TranslateTransform x:Name="mostrarCorrida"/>
+                                    <TransformGroup>
+                                        <ScaleTransform x:Name="mostrarEscala"/>
+                                        <TranslateTransform x:Name="mostrarCorrida"/>
+                                    </TransformGroup>
                                 </Button.RenderTransform>
                             </Button>
                         </Grid>
                     </StackPanel>
+                    </Grid>
                 </Grid>
             </Button>
         </StackPanel>

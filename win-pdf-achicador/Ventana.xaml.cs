@@ -21,7 +21,7 @@ public partial class Ventana : Window
     string? gs;
     Compressor? active;
     string? salida; // el último PDF achicado, para «mostrar ahora»
-    bool working, updateOffered, buscando, anticipando, conBorrar;
+    bool working, updateOffered, buscando, anticipando, conBorrar, borrando, encima;
     string? nuevoExe; // descargado y verificado: reemplaza al actual al reiniciar
 
     public Ventana(string[] files)
@@ -40,11 +40,7 @@ public partial class Ventana : Window
         target.TextChanged += (_, _) => UpdateModeUi();
         // Solo megas enteros: nadie necesita 2,5 MB, y así el campo chico alcanza.
         target.PreviewTextInput += (_, e) => e.Handled = !e.Text.All(char.IsDigit);
-        borrar.Click += (_, _) =>
-        {
-            target.Clear();
-            target.Focus();
-        };
+        borrar.Click += (_, _) => Borrar();
         // La cruz gira un cuarto de vuelta antes de borrar: dice qué va a hacer.
         borrar.MouseEnter += (_, _) => Resorte.Animar((borrar, "giro"), 90, v => borrarGiro.Angle = v, rigidez: 380, rebote: 0.3);
         borrar.MouseLeave += (_, _) => Resorte.Animar((borrar, "giro"), 0, v => borrarGiro.Angle = v, rigidez: 380, rebote: 0.3);
@@ -60,8 +56,15 @@ public partial class Ventana : Window
         };
         // Lo que va a pasar se insinúa: la tarjeta cede bajo el puntero antes de abrir el diálogo.
         tarjeta.PreviewMouseLeftButtonDown += (_, e) => { if (!EnBoton(e)) Escalar(0.985); };
-        tarjeta.PreviewMouseLeftButtonUp += (_, _) => Escalar(anticipando ? 1.02 : 1);
-        tarjeta.MouseLeave += (_, _) => Escalar(anticipando ? 1.02 : 1);
+        tarjeta.PreviewMouseLeftButtonUp += (_, _) => Levantar();
+        // Todo lo que se puede tocar responde: al pasar por encima la tarjeta se levanta y su sombra crece.
+        tarjeta.MouseEnter += (_, _) => { encima = true; Levantar(); };
+        tarjeta.MouseLeave += (_, _) => { encima = false; Levantar(); };
+        actualizar.MouseEnter += (_, _) => Pulsar(actualizar, actualizarEscala, 1.08);
+        actualizar.MouseLeave += (_, _) => Pulsar(actualizar, actualizarEscala, 1);
+        actualizar.PreviewMouseLeftButtonDown += (_, _) => Pulsar(actualizar, actualizarEscala, 0.92);
+        actualizar.PreviewMouseLeftButtonUp += (_, _) => Pulsar(actualizar, actualizarEscala, actualizar.IsMouseOver ? 1.08 : 1);
+        borrar.PreviewMouseLeftButtonDown += (_, _) => Pulsar(borrar, borrarEscala, 0.8);
         DragEnter += (_, e) => Arrastre(e);
         DragOver += (_, e) => Arrastre(e);
         // WPF avisa DragLeave también al pasar de un elemento a otro adentro: cuenta solo si salió de la ventana.
@@ -165,10 +168,9 @@ public partial class Ventana : Window
         var done = results.Where(r => r.hecho.Output is not null).ToList();
         var problem = results.FirstOrDefault(r => r.hecho.Output is null);
         // El resultado reemplaza la línea «original: ...» y sigue en rojo.
-        titulo.Text = files.Length == 1 ? Path.GetFileName(files[0]) : $"{files.Length} PDF";
+        Poner(titulo, files.Length == 1 ? Path.GetFileName(files[0]) : $"{files.Length} PDF");
         titulo.ToolTip = files.Length == 1 ? files[0] : null;
         Rojo(true);
-        Opacidad(bajada, 1, desde: 0);
         if (files.Length == 1 && results[0].hecho is { Output: not null } h)
         {
             // El tamaño nuevo rueda desde el original hasta donde quedó.
@@ -177,16 +179,16 @@ public partial class Ventana : Window
         }
         else
         {
-            Resorte.Olvidar((bajada, "tamaño"));
-            bajada.Text = files.Length == 1
+            Poner(bajada, files.Length == 1
                 ? results[0].hecho.Message
-                : $"{done.Count} de {files.Length} achicados" + (problem.file is null ? "" : $"\n{Path.GetFileName(problem.file)}: {problem.hecho.Message}");
+                : $"{done.Count} de {files.Length} achicados" + (problem.file is null ? "" : $"\n{Path.GetFileName(problem.file)}: {problem.hecho.Message}"));
         }
 
         if (done.Count > 0)
         {
             salida = done[^1].hecho.Output;
             Listo();
+            Volar();
             // La prensa termina de apretar y suelta con un rebote: lo achicó.
             Resorte.Animar((icono, "ancho"), 1, v => iconoEscala.ScaleX = v, velocidad: -4, rigidez: 300, rebote: 0.4);
         }
@@ -212,10 +214,11 @@ public partial class Ventana : Window
         try
         {
             var original = new FileInfo(input).Length;
-            titulo.Text = $"{label}{Path.GetFileName(input)}";
+            Poner(titulo, $"{label}{Path.GetFileName(input)}");
             titulo.ToolTip = input;
             Rojo(false);
-            bajada.Text = $"original: {FormatSize(original)}";
+            // Una cifra importante sube desde cero; al terminar, la misma sigue rodando hasta el resultado.
+            Resorte.Animar((bajada, "tamaño"), original, v => bajada.Text = $"original: {FormatSize((long)v)}", desde: 0, rigidez: 120);
             estado.Text = "";
             Progreso(0);
             if (original <= maxBytes) return new(null, "Ya pesa menos de lo que necesitas");
@@ -286,13 +289,14 @@ public partial class Ventana : Window
         var smart = target.Text.Trim().Length > 0 && target.Text.Trim() != "0";
         // Con un tamaño escrito manda el modo inteligente: el manual se apaga, despacio.
         manual.IsEnabled = !smart;
-        Opacidad(manual, smart ? 0.5 : 1);
+        // Con 0,5 encima del gris de Windows no se leía en modo oscuro: Primero, que se lea.
+        Opacidad(manual, smart ? 0.75 : 1);
         targetLabel.SetResourceReference(TextBlock.ForegroundProperty, smart ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush");
         megabytes.SetResourceReference(TextBlock.ForegroundProperty, smart ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush");
 
         // La cruz crece desde el centro cuando hay algo para borrar, y se achica cuando no.
         var hay = target.Text.Length > 0;
-        if (hay == conBorrar) return;
+        if (hay == conBorrar || borrando) return;
         conBorrar = hay;
         borrar.IsHitTestVisible = hay;
         Resorte.Animar((borrar, "escala"), hay ? 1 : 0.4, v => borrarEscala.ScaleX = borrarEscala.ScaleY = v, rigidez: 420, rebote: hay ? 0.4 : 0);
@@ -313,10 +317,10 @@ public partial class Ventana : Window
     {
         if (!conBajada)
         {
-            titulo.Text = gs is null && updateOffered ? "Ghostscript no está instalado" : "Tira tus PDF aquí";
+            Poner(titulo, gs is null && updateOffered ? "Ghostscript no está instalado" : "Tira tus PDF aquí");
             titulo.ToolTip = null;
             Rojo(false);
-            bajada.Text = "o haz clic para buscar";
+            Poner(bajada, "o haz clic para buscar");
         }
         Zona(null);
     }
@@ -340,7 +344,7 @@ public partial class Ventana : Window
             {
                 if (el.Visibility == Visibility.Visible && el.Opacity > 0.5) continue;
                 el.Visibility = Visibility.Visible;
-                var corrida = el.RenderTransform as TranslateTransform ?? (TranslateTransform)(el.RenderTransform = new TranslateTransform());
+                var corrida = el == mostrar ? mostrarCorrida : el.RenderTransform as TranslateTransform ?? (TranslateTransform)(el.RenderTransform = new TranslateTransform());
                 Aparecer(el, corrida, desdeY: 12);
             }
             else if (el.Visibility == Visibility.Visible)
@@ -366,10 +370,9 @@ public partial class Ventana : Window
     // Un problema sacude la tarjeta y lo dice en rojo: un rebote corto que dice «esto no».
     void Problema(string texto)
     {
-        titulo.Text = "Tira tus PDF aquí";
+        Poner(titulo, "Tira tus PDF aquí");
         Rojo(true);
-        bajada.Text = texto;
-        Opacidad(bajada, 1, desde: 0);
+        Poner(bajada, texto);
         Reposo(conBajada: true);
         Sacudir();
     }
@@ -388,7 +391,7 @@ public partial class Ventana : Window
     {
         if (si == anticipando) return;
         anticipando = si;
-        Escalar(si ? 1.02 : 1);
+        Levantar();
         borde.StrokeDashArray = si ? null : new DoubleCollection([4, 3]);
         borde.SetResourceReference(Formas.Shape.StrokeProperty, si ? "AccentFillColorDefaultBrush" : "ControlStrongStrokeColorDefaultBrush");
         Resorte.Animar((icono, "escala"), si ? 1.1 : 1, v => iconoEscala.ScaleY = v, rigidez: 420, rebote: 0.3);
@@ -399,8 +402,111 @@ public partial class Ventana : Window
     void Apretar() =>
         Resorte.Animar((icono, "ancho"), 1, v => iconoEscala.ScaleX = v, velocidad: -5, rigidez: 420, rebote: 0.45);
 
+    // Cuanto más se levanta la tarjeta, más sombra proyecta: con archivos encima, más que con el puntero.
+    void Levantar()
+    {
+        Escalar(anticipando ? 1.02 : encima ? 1.01 : 1);
+    }
+
     void Escalar(double v) =>
-        Resorte.Animar((tarjeta, "escala"), v, x => tarjetaEscala.ScaleX = tarjetaEscala.ScaleY = x, rigidez: 500, rebote: 0.2);
+        Resorte.Animar((tarjeta, "escala"), v, x =>
+        {
+            tarjetaEscala.ScaleX = tarjetaEscala.ScaleY = x;
+            // La sombra sigue a la escala en el mismo resorte: de 0,985 (hundida) a 1,02 (bien arriba).
+            var n = Math.Clamp((x - 0.985) / 0.035, 0, 1.2);
+            sombra.BlurRadius = 4 + 18 * n;
+            sombra.ShadowDepth = 1 + 6 * n;
+            sombra.Opacity = 0.06 + 0.16 * n;
+        }, rigidez: 500, rebote: 0.2);
+
+    static void Pulsar(UIElement el, ScaleTransform escala, double v) =>
+        Resorte.Animar((el, "pulso"), v, x => escala.ScaleX = escala.ScaleY = x, rigidez: 500, rebote: 0.3);
+
+    // Los textos de la tarjeta no cambian de golpe: el nuevo aparece subiendo un poco sobre el anterior.
+    static void Poner(TextBlock t, string texto)
+    {
+        Resorte.Olvidar((t, "tamaño")); // si estaba rodando un número, este texto lo reemplaza
+        if (t.Text == texto) return;
+        t.Text = texto;
+        var corrida = t.RenderTransform as TranslateTransform ?? (TranslateTransform)(t.RenderTransform = new TranslateTransform());
+        Aparecer(t, corrida, desdeY: 6);
+    }
+
+    // El PDF achicado sale de la prensa y vuela a «mostrar ahora», que late al recibirlo.
+    void Volar()
+    {
+        if (Resorte.Quieto) return;
+        var papel = Papel();
+        capa.Children.Add(papel);
+        var desde = icono.TranslatePoint(new Point(icono.ActualWidth / 2, icono.ActualHeight / 2), capa);
+        var clave = (papel, "t");
+        Resorte.Animar(clave, 1, t =>
+        {
+            // El destino se mide en cada cuadro: el botón todavía está subiendo a su lugar.
+            var hasta = mostrar.TranslatePoint(new Point(mostrar.ActualWidth / 2, mostrar.ActualHeight / 2), capa);
+            var cima = new Point((desde.X + hasta.X) / 2 + 40, Math.Min(desde.Y, hasta.Y) - 30);
+            var u = 1 - t;
+            var x = u * u * desde.X + 2 * u * t * cima.X + t * t * hasta.X;
+            var y = u * u * desde.Y + 2 * u * t * cima.Y + t * t * hasta.Y;
+            var e = 1 - 0.45 * t;
+            papel.RenderTransform = new MatrixTransform(e, 0, 0, e, x - 9 * e, y - 11 * e);
+            papel.Opacity = t < 0.85 ? 1 : (1 - t) / 0.15;
+        }, desde: 0, rigidez: 70, alLlegar: () =>
+        {
+            capa.Children.Remove(papel);
+            Resorte.Olvidar(clave);
+            Resorte.Animar((mostrar, "latido"), 1, v => mostrarEscala.ScaleX = mostrarEscala.ScaleY = v, velocidad: 2.5, rigidez: 500, rebote: 0.5);
+        });
+    }
+
+    // Una hoja chiquita con la banda roja del PDF del ícono.
+    Grid Papel() => new()
+    {
+        Width = 18, Height = 22,
+        Effect = new DropShadowEffect { BlurRadius = 6, ShadowDepth = 1.5, Opacity = 0.25 },
+        Children =
+        {
+            new Border { Background = Brushes.White, CornerRadius = new(3), BorderThickness = new(0.5), BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) },
+            new Border { Height = 6, Margin = new(0, 0, 0, 4), VerticalAlignment = VerticalAlignment.Bottom, Background = (Brush)FindResource("Rojo") }
+        }
+    };
+
+    // Lo que se borra va a parar a la cruz que se tocó: el número viaja hasta ella achicándose, y recién
+    // entonces la cruz se va.
+    void Borrar()
+    {
+        var texto = target.Text;
+        // Antes de vaciar el campo: si no, UpdateModeUi saca la cruz antes de que llegue el número.
+        borrando = texto.Length > 0 && !Resorte.Quieto;
+        target.Clear();
+        target.Focus();
+        if (!borrando) return;
+        var numero = new TextBlock { Text = texto, FontSize = target.FontSize, FontFamily = target.FontFamily };
+        numero.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        numero.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        capa.Children.Add(numero);
+        // Donde estaba el número: alineado a la derecha, antes del lugar que el Padding le deja a la cruz.
+        var desde = target.TranslatePoint(new Point(target.ActualWidth - target.Padding.Right - numero.DesiredSize.Width - 2,
+            (target.ActualHeight - numero.DesiredSize.Height) / 2), capa);
+        var hasta = borrar.TranslatePoint(new Point(borrar.ActualWidth / 2, borrar.ActualHeight / 2), capa);
+        var clave = (numero, "t");
+        Resorte.Animar(clave, 1, t =>
+        {
+            var e = 1 - 0.85 * t;
+            var w = numero.DesiredSize.Width * e;
+            var h = numero.DesiredSize.Height * e;
+            var cx = desde.X + numero.DesiredSize.Width / 2 + (hasta.X - desde.X - numero.DesiredSize.Width / 2) * t;
+            var cy = desde.Y + numero.DesiredSize.Height / 2 + (hasta.Y - desde.Y - numero.DesiredSize.Height / 2) * t;
+            numero.RenderTransform = new MatrixTransform(e, 0, 0, e, cx - w / 2, cy - h / 2);
+            numero.Opacity = 1 - t * t;
+        }, desde: 0, rigidez: 260, alLlegar: () =>
+        {
+            capa.Children.Remove(numero);
+            Resorte.Olvidar(clave);
+            borrando = false;
+            UpdateModeUi();
+        });
+    }
 
     void Sacudir() =>
         Resorte.Animar((tarjeta, "corrida"), 0, v => tarjetaCorrida.X = v, velocidad: 700, rigidez: 900, rebote: 0.85);
@@ -539,7 +645,7 @@ public partial class Ventana : Window
         if (gs is null)
         {
             Rojo(true);
-            bajada.Text = "instalación incompleta";
+            Poner(bajada, "instalación incompleta");
         }
         if (MessageBox.Show(this, $"{message}\n\n¿Quieres abrir la descarga oficial?", "Ghostscript", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
             Process.Start(new ProcessStartInfo(GhostscriptPage) { UseShellExecute = true });
