@@ -2,13 +2,15 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <!-- WFO1000 pide atributos para el diseñador de WinForms, que este proyecto no usa. -->
-    <NoWarn>$(NoWarn);WFO1000</NoWarn>
     <AssemblyName>Achicar PDF</AssemblyName>
     <Title>Achicar PDF</Title>
     <Product>Achicar PDF</Product>
+    <!-- La versión real la pone el workflow desde el tag; 0.0.0 marca una compilación local. -->
+    <Version>0.0.0</Version>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <UseWindowsForms>true</UseWindowsForms>
+    <!-- WPF y no WinForms: el tema Fluent trae de Windows el Mica, el modo oscuro y los controles de
+         Windows 11, y las animaciones van por la placa de video. -->
+    <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <PublishSingleFile>true</PublishSingleFile>
@@ -18,4 +20,14 @@
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- La prensa del ícono, grande en el recuadro. -->
+    <Resource Include="app.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- WPF saca estos dos de los using implícitos (Path choca con System.Windows.Shapes.Path) y el motor
+         los usa en todos lados. -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
 </Project>

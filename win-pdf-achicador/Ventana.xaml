@@ -1,0 +1,200 @@
+<!-- Sin Background propio: el tema Fluent deja la ventana transparente y Windows 11 pone Mica detrás. -->
+<Window x:Class="Ventana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Achicar PDF" Width="372" SizeToContent="Height" ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen" AllowDrop="True" UseLayoutRounding="True"
+        FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="14">
+    <Window.Resources>
+        <!-- El amarillo sale del fondo del ícono; el rojo de la cruz es fijo porque lleva blanco encima (el
+             rojo del tema oscuro es rosa y la cruz blanca no se leería). -->
+        <SolidColorBrush x:Key="Prensa" Color="#FDDC84"/>
+        <SolidColorBrush x:Key="Rojo" Color="#C42B1C"/>
+        <FontFamily x:Key="Iconos">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+        <FontFamily x:Key="Titulos">Segoe UI Variable Display, Segoe UI</FontFamily>
+        <!-- Botón sin aspecto de botón: la tarjeta, la cruz y la flecha se dibujan solas, y siguen siendo
+             botones para el teclado y el lector de pantalla. -->
+        <Style x:Key="Llano" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Rotulo" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="4,0,0,6"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}"/>
+        </Style>
+        <Style x:Key="Seccion" TargetType="Border">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14,10,14,12"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <StackPanel Margin="20,10,20,20">
+            <Grid>
+                <TextBlock Style="{StaticResource Rotulo}" Text="MODO INTELIGENTE"/>
+                <!-- Arriba a la derecha: la flecha circular busca una versión nueva; cuando la descargó, el mismo
+                     botón se estira hasta decir «Reiniciar para actualizar». -->
+                <Button x:Name="actualizar" Style="{StaticResource Llano}" HorizontalAlignment="Right" Margin="0,0,0,6"
+                        AutomationProperties.Name="Buscar actualización">
+                    <Grid x:Name="actualizarCaja" Width="32" Height="32">
+                        <Border CornerRadius="16" Background="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+                        <Border x:Name="actualizarAcento" CornerRadius="16" Opacity="0"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"/>
+                        <Ellipse x:Name="anillo" Width="28" Height="28" Margin="0,0,2,0" HorizontalAlignment="Right"
+                                 StrokeThickness="2" Opacity="0" RenderTransformOrigin="0.5,0.5"
+                                 Stroke="{DynamicResource AccentFillColorDefaultBrush}">
+                            <Ellipse.RenderTransform>
+                                <RotateTransform Angle="-90"/>
+                            </Ellipse.RenderTransform>
+                        </Ellipse>
+                        <TextBlock x:Name="actualizarTexto" Text="Reiniciar para actualizar" Opacity="0" Margin="14,0,34,0"
+                                   VerticalAlignment="Center" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"/>
+                        <Grid Width="32" HorizontalAlignment="Right" RenderTransformOrigin="0.5,0.5">
+                            <Grid.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="flechaEscala"/>
+                                    <RotateTransform x:Name="giro"/>
+                                </TransformGroup>
+                            </Grid.RenderTransform>
+                            <TextBlock x:Name="flecha" Text="&#xE72C;" FontFamily="{StaticResource Iconos}" FontSize="14"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </Grid>
+                    </Grid>
+                </Button>
+            </Grid>
+
+            <Border Style="{StaticResource Seccion}">
+                <StackPanel>
+                    <TextBlock x:Name="targetLabel" Text="Tamaño máximo que necesitas"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <!-- La cruz va adentro del campo, a la derecha; el Padding le deja su lugar al número. -->
+                        <Grid Width="78">
+                            <TextBox x:Name="target" MaxLength="3" TextAlignment="Right" Padding="8,5,30,6"
+                                     AutomationProperties.Name="Tamaño máximo en MB"/>
+                            <Button x:Name="borrar" Style="{StaticResource Llano}" Width="18" Height="18"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"
+                                    Opacity="0" IsHitTestVisible="False" Focusable="False" ToolTip="Borrar"
+                                    AutomationProperties.Name="Borrar el tamaño máximo" RenderTransformOrigin="0.5,0.5">
+                                <Button.RenderTransform>
+                                    <TransformGroup>
+                                        <ScaleTransform x:Name="borrarEscala" ScaleX="0.4" ScaleY="0.4"/>
+                                        <RotateTransform x:Name="borrarGiro"/>
+                                    </TransformGroup>
+                                </Button.RenderTransform>
+                                <Grid>
+                                    <Ellipse Fill="{StaticResource Rojo}"/>
+                                    <TextBlock Text="&#xE711;" FontFamily="{StaticResource Iconos}" FontSize="8"
+                                               Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
+                            </Button>
+                        </Grid>
+                        <TextBlock x:Name="megabytes" Text="MB" Margin="8,0,0,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <Button x:Name="emailPreset" Content="email 10" Margin="16,0,0,0" Padding="10,4" FontSize="13"
+                                AutomationProperties.Name="Tamaño para email: 10 MB"/>
+                        <Button x:Name="portalPreset" Content="portal 2" Margin="6,0,0,0" Padding="10,4" FontSize="13"
+                                AutomationProperties.Name="Tamaño para portales: 2 MB"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Style="{StaticResource Rotulo}" Text="MODO MANUAL" Margin="4,14,0,6"/>
+            <Border x:Name="manual" Style="{StaticResource Seccion}">
+                <StackPanel>
+                    <CheckBox x:Name="gray" Content="Quitar color" MinWidth="0"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <RadioButton x:Name="light" Content="Pequeño" Tag="75" MinWidth="0" Margin="0,0,14,0"/>
+                        <RadioButton x:Name="normal" Content="Normal" Tag="100" MinWidth="0" Margin="0,0,14,0" IsChecked="True"/>
+                        <RadioButton x:Name="quality" Content="Más calidad" Tag="150" MinWidth="0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- La tarjeta: donde se sueltan los PDF, o se hace clic para buscarlos. -->
+            <Button x:Name="tarjeta" Style="{StaticResource Llano}" Margin="0,16,0,0" RenderTransformOrigin="0.5,0.5"
+                    AutomationProperties.Name="Elegir los PDF para achicar">
+                <Button.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="tarjetaEscala"/>
+                        <TranslateTransform x:Name="tarjetaCorrida"/>
+                    </TransformGroup>
+                </Button.RenderTransform>
+                <Grid MinHeight="262" ClipToBounds="True">
+                    <Border CornerRadius="12" Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"/>
+                    <!-- Un resplandor del amarillo del ícono detrás de la prensa: le da calor en los dos modos. -->
+                    <Ellipse Width="260" Height="170" VerticalAlignment="Top" Margin="0,2,0,0" IsHitTestVisible="False">
+                        <Ellipse.Fill>
+                            <RadialGradientBrush>
+                                <GradientStop Color="#40FDDC84" Offset="0"/>
+                                <GradientStop Color="#00FDDC84" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <!-- Punteado: dice «suelta aquí». Con archivos encima se vuelve continuo y del color de acento. -->
+                    <Rectangle x:Name="borde" RadiusX="12" RadiusY="12" StrokeThickness="1.5" StrokeDashArray="4 3"
+                               Stroke="{DynamicResource ControlStrongStrokeColorDefaultBrush}"/>
+                    <!-- Sin trabajo la zona de abajo está vacía y el contenido baja hasta quedar centrado; cuando la
+                         zona se llena, sube a hacerle lugar. -->
+                    <StackPanel x:Name="contenido" VerticalAlignment="Center" Margin="18,16,18,16">
+                        <StackPanel.RenderTransform>
+                            <TranslateTransform x:Name="contenidoCorrida" Y="44"/>
+                        </StackPanel.RenderTransform>
+                        <Image x:Name="icono" Source="app.png" Width="88" Height="88" RenderTransformOrigin="0.5,0.6"
+                               RenderOptions.BitmapScalingMode="HighQuality">
+                            <Image.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform x:Name="iconoEscala"/>
+                                    <TranslateTransform x:Name="iconoAltura"/>
+                                </TransformGroup>
+                            </Image.RenderTransform>
+                        </Image>
+                        <TextBlock x:Name="titulo" Margin="0,10,0,0" TextAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   FontFamily="{StaticResource Titulos}" FontSize="18" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        <!-- El tamaño original mientras trabaja; después, en rojo, lo que se consiguió. -->
+                        <TextBlock x:Name="bajada" Margin="6,2,6,0" TextAlignment="Center" TextWrapping="Wrap" FontSize="13"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        <Grid x:Name="zona" Height="76" Margin="0,12,0,0">
+                            <StackPanel x:Name="trabajo" Visibility="Collapsed" VerticalAlignment="Center">
+                                <Grid>
+                                    <TextBlock x:Name="estado" VerticalAlignment="Center" FontSize="12" Margin="0,0,96,0"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <Button x:Name="cancelar" Content="cancelar" HorizontalAlignment="Right" Padding="12,4"
+                                            FontSize="13"/>
+                                </Grid>
+                                <ProgressBar x:Name="progreso" Margin="0,12,0,0" Maximum="100"/>
+                            </StackPanel>
+                            <Button x:Name="mostrar" Content="mostrar ahora" Visibility="Collapsed" Padding="16,5"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    AutomationProperties.Name="Mostrar el PDF achicado en su carpeta">
+                                <Button.RenderTransform>
+                                    <TranslateTransform x:Name="mostrarCorrida"/>
+                                </Button.RenderTransform>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Button>
+        </StackPanel>
+
+        <!-- Encima de todo: las burbujas de la flecha. No ataja clics. -->
+        <Canvas x:Name="capa" IsHitTestVisible="False"/>
+    </Grid>
+</Window>

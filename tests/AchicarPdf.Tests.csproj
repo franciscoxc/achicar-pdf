@@ -6,8 +6,9 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <!-- El motor no usa WinForms: se compila acá directo para probarlo en cualquier sistema. -->
+    <!-- El motor y el actualizador no usan WPF: se compilan acá directo para probarlos en cualquier sistema. -->
     <Compile Include="..\win-pdf-achicador\Compressor.cs" />
+    <Compile Include="..\win-pdf-achicador\Actualizador.cs" />
     <None Include="escaneo-200ppi.pdf" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

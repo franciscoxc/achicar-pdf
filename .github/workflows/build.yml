@@ -26,8 +26,11 @@ jobs:
       - name: Compilar x64 y ARM64
         working-directory: win-pdf-achicador
         run: |
-          dotnet publish "Achicar PDF.csproj" -c Release -r win-x64 -o publish/win-x64
-          dotnet publish "Achicar PDF.csproj" -c Release -r win-arm64 -o publish/win-arm64
+          # La versión sale del tag (v1.3.0 -> 1.3.0): la flecha de actualizar la compara con la última
+          # publicada. Sin tag queda en 0.0.0, la del csproj.
+          $v = if ($env:GITHUB_REF -like 'refs/tags/v*') { $env:GITHUB_REF_NAME.Substring(1) } else { '0.0.0' }
+          dotnet publish "Achicar PDF.csproj" -c Release -r win-x64 -p:Version=$v -o publish/win-x64
+          dotnet publish "Achicar PDF.csproj" -c Release -r win-arm64 -p:Version=$v -o publish/win-arm64
           Copy-Item "publish/win-x64/Achicar PDF.exe" ../Achicar.PDF.x64.exe
           Copy-Item "publish/win-arm64/Achicar PDF.exe" ../Achicar.PDF.arm.exe
 
